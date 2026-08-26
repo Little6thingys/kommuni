@@ -1,0 +1,92 @@
+export type AudioParams = {
+  notes: number[];
+  overtones: number[];
+  filterFreq: number;
+  latentEnergy: number;
+};
+
+export type AudioScale = 'pentatonic' | 'chromatic';
+
+export type AudioEngineStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+export type AudioEngineLatencyReport = {
+  type: 'LATENCY_REPORT';
+  inferenceMs: number;
+  renderMs: number;
+  activeVoices: number;
+};
+
+export type AudioEngineReadyEvent = {
+  type: 'BRIDGE_READY';
+};
+
+export type AudioEngineErrorEvent = {
+  type: 'ENGINE_ERROR';
+  message: string;
+};
+
+export type AudioEngineEvent =
+  | AudioEngineLatencyReport
+  | AudioEngineReadyEvent
+  | AudioEngineErrorEvent;
+
+export type AudioEnginePlayMessage = {
+  type: 'PLAY_NOTE';
+  payload: AudioParams;
+};
+
+export type AudioEngineScaleMessage = {
+  type: 'SET_SCALE';
+  scale: AudioScale;
+};
+
+export type AudioEngineStopMessage = {
+  type: 'STOP';
+};
+
+export type AudioEngineMessage =
+  | AudioEnginePlayMessage
+  | AudioEngineScaleMessage
+  | AudioEngineStopMessage;
+
+export type GazeSnapshot = {
+  gazeAngle: number;
+  isJointAttention: boolean;
+  headPose: {
+    yaw: number;
+    pitch: number;
+    roll: number;
+  };
+};
+
+export type TouchLatent = {
+  z: Float32Array;
+  stressLevel: number;
+};
+
+export type HarmoniNetOutput = {
+  chordNotes: number[];
+  /** 12-dim pitch-class activation vector for cross-attention query. */
+  chordVector: Float32Array;
+  tension: number;
+};
+
+export type FusionOutput = {
+  audioParams: AudioParams;
+  rewardTriggered: boolean;
+};
+
+export type MetricKind =
+  | 'inference'
+  | 'audio_latency'
+  | 'consonance'
+  | 'benchmark';
+
+export type MetricEntry = {
+  id: string;
+  timestamp: string;
+  kind: MetricKind;
+  payload: Record<string, number | string | boolean>;
+};
+
+export type PhaseState = 'LOADING' | 'PHASE1' | 'PATIENCE' | 'PHASE2' | 'DATALOG';

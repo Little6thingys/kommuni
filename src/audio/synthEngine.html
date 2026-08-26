@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0"
+    />
+    <title>Kommuni Synth Engine</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: #05050a;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      const BRIDGE = window.ReactNativeWebView;
+      const NOTE_RELEASE_MS = 480;
+      const SCALE_MAP = {
+        pentatonic: [0, 2, 4, 7, 9],
+        chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+      };
+
+      let audioContext = null;
+      let masterGain = null;
+      let filterNode = null;
+      let compressor = null;
+      let currentScale = 'pentatonic';
+      let activeVoices = [];
+
+      function post(message) {
+        BRIDGE?.postMessage(JSON.stringify(message));
+      }
+
+      function ensureContext() {
+        if (!audioContext) {
+          const AudioCtor = window.AudioContext || window.webkitAudioContext;
+          audioContext = new AudioCtor();
+
+          masterGain = audioContext.createGain();
+          masterGain.gain.value = 0.16;
+
+          filterNode = audioContext.createBiquadFilter();
+          filterNode.type = 'lowpass';
+          filterNode.frequency.value = 880;
+          filterNode.Q.value = 0.8;
+
+          compressor = audioContext.createDynamicsCompressor();
+          compressor.threshold.value = -20;
+          compressor.knee.value = 20;
+          compressor.ratio.value = 8;
+          compressor.attack.value = 0.003;
+          compressor.release.value = 0.25;
+
+          filterNode.connect(masterGain);
+          masterGain.connect(compressor);
+          compressor.connect(audioContext.destination);
+        }
+
+        if (audioContext.state === 'suspended') {
+          audioContext.resume().catch((error) => {
+            post({
+              type: 'ENGINE_ERROR',
+              message: String(error?.message ?? error),
+            });
+          });
+        }
+
+        return audioContext;
+      }
+
+      function midiToFrequency(note) {
+        return 440 * Math.pow(2, (note - 69) / 12);
+      }
+
+      function quantizeNote(note) {
+        const scale = SCALE_MAP[currentScale] ?? SCALE_MAP.pentatonic;
+        const normalized = Math.round(note);
+        const octave = Math.floor(normalized / 12);
+        const pitchClass = ((normalized % 12) + 12) % 12;
+
+        let best = scale[0];
+        let bestDistance = Math.abs(best - pitchClass);
+
+        for (let index = 1; index < scale.length; index += 1) {
+          const distance = Math.abs(scale[index] - pitchClass);
+          if (distance < bestDistance) {
+            best = scale[index];
+            bestDistance = distance;
+          }
+        }
+
+        return octave * 12 + best;
+      }
+
+      function clearVoice(voice) {
+        try {
+          voice.oscillators.forEach((oscillator) => {
+            oscillator.stop();
+            oscillator.disconnect();
+          });
+          voice.gain.disconnect();
+        } catch {
+          // Nodes can already be stopped during release.
+        }
+      }
+
+      function stopAllVoices() {
+        activeVoices.forEach(clearVoice);
+        activeVoices = [];
+      }
+
+      function playNote(payload) {
+        const startedAt = performance.now();
+        const context = ensureContext();
+        const now = context.currentTime;
+        const latentEnergy = Math.max(0, Math.min(payload.latentEnergy || 0, 1));
+        const notes = Array.isArray(payload.notes) ? payload.notes : [];
+        const overtones =
+          Array.isArray(payload.overtones) && payload.overtones.length
+            ? payload.overtones
+            : [1];
+
+        filterNode.frequency.setTargetAtTime(
+          Math.max(140, payload.filterFreq || 880),
+          now,
+          0.015,
+        );
+
+        stopAllVoices();
+
+        notes.forEach((rawNote) => {
+          const note = quantizeNote(rawNote);
+          const baseFrequency = midiToFrequency(note);
+          const voiceGain = context.createGain();
+          voiceGain.gain.setValueAtTime(0.0001, now);
+
+          const oscillators = overtones.map((strength, index) => {
+            const oscillator = context.createOscillator();
+            oscillator.type = index === 0 ? 'sawtooth' : 'triangle';
+            oscillator.frequency.setValueAtTime(baseFrequency * (index + 1), now);
+
+            const partialGain = context.createGain();
+            partialGain.gain.setValueAtTime(
+              Math.max(0.02, Math.min(Number(strength) || 0, 1)) /
+                Math.max(overtones.length, 1),
+              now,
+            );
+
+            oscillator.connect(partialGain);
+            partialGain.connect(voiceGain);
+            oscillator.start(now);
+            oscillator.stop(now + NOTE_RELEASE_MS / 1000);
+            return oscillator;
+          });
+
+          const attack = 0.01 + latentEnergy * 0.03;
+          const sustain = 0.08 + latentEnergy * 0.06;
+          const peak = 0.12 + latentEnergy * 0.14;
+
+          voiceGain.gain.exponentialRampToValueAtTime(peak, now + attack);
+          voiceGain.gain.exponentialRampToValueAtTime(
+            Math.max(0.03, sustain),
+            now + NOTE_RELEASE_MS / 1000 - 0.08,
+          );
+          voiceGain.gain.exponentialRampToValueAtTime(
+            0.0001,
+            now + NOTE_RELEASE_MS / 1000,
+          );
+
+          voiceGain.connect(filterNode);
+
+          const voice = {
+            gain: voiceGain,
+            oscillators,
+          };
+
+          activeVoices.push(voice);
+
+          window.setTimeout(() => {
+            clearVoice(voice);
+            activeVoices = activeVoices.filter((item) => item !== voice);
+          }, NOTE_RELEASE_MS + 24);
+        });
+
+        post({
+          type: 'LATENCY_REPORT',
+          inferenceMs: 0,
+          renderMs: performance.now() - startedAt,
+          activeVoices: notes.length,
+        });
+      }
+
+      function handleMessage(raw) {
+        let payload = raw;
+        if (typeof payload === 'string') {
+          try {
+            payload = JSON.parse(payload);
+          } catch {
+            post({
+              type: 'ENGINE_ERROR',
+              message: 'Malformed bridge payload',
+            });
+            return;
+          }
+        }
+
+        if (!payload || typeof payload.type !== 'string') {
+          return;
+        }
+
+        if (payload.type === 'PLAY_NOTE') {
+          playNote(payload.payload || {});
+          return;
+        }
+
+        if (payload.type === 'SET_SCALE') {
+          currentScale =
+            payload.scale === 'chromatic' ? 'chromatic' : 'pentatonic';
+          return;
+        }
+
+        if (payload.type === 'STOP') {
+          stopAllVoices();
+        }
+      }
+
+      window.addEventListener('message', (event) => {
+        handleMessage(event.data);
+      });
+
+      document.addEventListener('message', (event) => {
+        handleMessage(event.data);
+      });
+
+      post({ type: 'BRIDGE_READY' });
+    </script>
+  </body>
+</html>

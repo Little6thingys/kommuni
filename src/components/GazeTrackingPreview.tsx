@@ -1,0 +1,297 @@
+import { useMemo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { Camera, type CameraDevice } from 'react-native-vision-camera';
+
+import type { GazeSnapshot } from '@/types';
+
+type GazeTrackingPreviewProps = {
+  device: CameraDevice | undefined;
+  enableNativeTracking: boolean;
+  modelPath: string | null;
+  onSnapshot: (snapshot: GazeSnapshot) => void;
+  onRuntimeError: (message: string) => void;
+};
+
+type MediaPipeBindings = {
+  Delegate: { GPU: number };
+  RunningMode: { LIVE_STREAM: number };
+  MediapipeCamera: React.ComponentType<{
+    style: object;
+    solution: object;
+    activeCamera?: 'front' | 'back';
+    resizeMode?: 'cover' | 'contain';
+  }>;
+  useFaceLandmarkDetection: (
+    onResults: (
+      result: {
+        results: Array<{
+          faceLandmarks: Array<Array<{ x: number; y: number; z: number }>>;
+          facialTransformationMatrixes: Array<{ data: number[] }>;
+        }>;
+      },
+      viewSize: { width: number; height: number },
+      mirrored: boolean,
+    ) => void,
+    onError: (error: { message: string }) => void,
+    runningMode: number,
+    model: string,
+    options?: {
+      numFaces?: number;
+      minFaceDetectionConfidence?: number;
+      minFacePresenceConfidence?: number;
+      minTrackingConfidence?: number;
+      delegate?: number;
+      mirrorMode?: 'no-mirror' | 'mirror' | 'mirror-front-only';
+    },
+  ) => object;
+};
+
+function loadMediaPipeBindings(): MediaPipeBindings | null {
+  try {
+    return require('react-native-mediapipe') as MediaPipeBindings;
+  } catch {
+    return null;
+  }
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function toDegrees(radians: number) {
+  return (radians * 180) / Math.PI;
+}
+
+function averagePoint(points: Array<{ x: number; y: number; z: number }>) {
+  if (points.length === 0) {
+    return { x: 0, y: 0, z: 0 };
+  }
+
+  const total = points.reduce(
+    (acc, point) => ({
+      x: acc.x + point.x,
+      y: acc.y + point.y,
+      z: acc.z + point.z,
+    }),
+    { x: 0, y: 0, z: 0 },
+  );
+
+  return {
+    x: total.x / points.length,
+    y: total.y / points.length,
+    z: total.z / points.length,
+  };
+}
+
+function getLandmark(
+  landmarks: Array<{ x: number; y: number; z: number }>,
+  index: number,
+) {
+  return landmarks[index] ?? { x: 0, y: 0, z: 0 };
+}
+
+function getPoseFromMatrix(matrixData?: number[]) {
+  if (!matrixData || matrixData.length < 16) {
+    return { yaw: 0, pitch: 0, roll: 0 };
+  }
+
+  const m00 = matrixData[0];
+  const m10 = matrixData[4];
+  const m20 = matrixData[8];
+  const m21 = matrixData[9];
+  const m22 = matrixData[10];
+
+  return {
+    yaw: toDegrees(Math.atan2(m20, m00)),
+    pitch: toDegrees(Math.atan2(-m21, Math.sqrt(m20 * m20 + m22 * m22))),
+    roll: toDegrees(Math.atan2(m10, m00)),
+  };
+}
+
+function deriveSnapshot(
+  result: {
+    faceLandmarks: Array<Array<{ x: number; y: number; z: number }>>;
+    facialTransformationMatrixes: Array<{ data: number[] }>;
+  } | null,
+): GazeSnapshot | null {
+  const landmarks = result?.faceLandmarks?.[0];
+
+  if (!landmarks || landmarks.length < 478) {
+    return null;
+  }
+
+  const leftIris = averagePoint([468, 469, 470, 471, 472].map((index) => getLandmark(landmarks, index)));
+  const rightIris = averagePoint([473, 474, 475, 476, 477].map((index) => getLandmark(landmarks, index)));
+  const leftInner = getLandmark(landmarks, 133);
+  const leftOuter = getLandmark(landmarks, 33);
+  const rightInner = getLandmark(landmarks, 362);
+  const rightOuter = getLandmark(landmarks, 263);
+
+  const leftSpan = Math.max(Math.abs(leftOuter.x - leftInner.x), 0.001);
+  const rightSpan = Math.max(Math.abs(rightOuter.x - rightInner.x), 0.001);
+  const leftOffset = ((leftIris.x - Math.min(leftOuter.x, leftInner.x)) / leftSpan - 0.5) * 2;
+  const rightOffset =
+    ((rightIris.x - Math.min(rightOuter.x, rightInner.x)) / rightSpan - 0.5) * 2;
+  const horizontalOffset = clamp((leftOffset + rightOffset) / 2, -1, 1);
+  const gazeAngle = clamp(horizontalOffset * 30, -30, 30);
+  const headPose = getPoseFromMatrix(result?.facialTransformationMatrixes?.[0]?.data);
+
+  return {
+    gazeAngle,
+    isJointAttention: Math.abs(gazeAngle) < 8 && Math.abs(headPose.yaw) < 12,
+    headPose,
+  };
+}
+
+function NativeMediapipeCamera({
+  bindings,
+  modelPath,
+  onSnapshot,
+  onRuntimeError,
+}: {
+  bindings: MediaPipeBindings;
+  modelPath: string;
+  onSnapshot: (snapshot: GazeSnapshot) => void;
+  onRuntimeError: (message: string) => void;
+}) {
+  const { Delegate, MediapipeCamera, RunningMode, useFaceLandmarkDetection } = bindings;
+
+  const onResults = useMemo(
+    () =>
+      (
+        bundle: {
+          results: Array<{
+            faceLandmarks: Array<Array<{ x: number; y: number; z: number }>>;
+            facialTransformationMatrixes: Array<{ data: number[] }>;
+          }>;
+        },
+      ) => {
+        const snapshot = deriveSnapshot(bundle.results?.[0] ?? null);
+        if (snapshot) {
+          onSnapshot(snapshot);
+        }
+      },
+    [onSnapshot],
+  );
+
+  const solution = useFaceLandmarkDetection(
+    onResults,
+    (error) => {
+      onRuntimeError(error.message || 'MediaPipe detector failed to start.');
+    },
+    RunningMode.LIVE_STREAM,
+    modelPath,
+    {
+      delegate: Delegate.GPU,
+      mirrorMode: 'mirror-front-only',
+      numFaces: 1,
+      minFaceDetectionConfidence: 0.6,
+      minFacePresenceConfidence: 0.6,
+      minTrackingConfidence: 0.5,
+    },
+  );
+
+  return (
+    <MediapipeCamera
+      style={styles.fill}
+      solution={solution}
+      activeCamera="front"
+      resizeMode="cover"
+    />
+  );
+}
+
+export function GazeTrackingPreview({
+  device,
+  enableNativeTracking,
+  modelPath,
+  onSnapshot,
+  onRuntimeError,
+}: GazeTrackingPreviewProps) {
+  const bindings = useMemo(() => {
+    if (!enableNativeTracking || !modelPath) {
+      return null;
+    }
+
+    const loaded = loadMediaPipeBindings();
+    if (!loaded) {
+      onRuntimeError('react-native-mediapipe could not be loaded from this runtime.');
+    }
+    return loaded;
+  }, [enableNativeTracking, modelPath, onRuntimeError]);
+
+  if (!device) {
+    return (
+      <View style={[styles.fill, styles.center]}>
+        <Text style={styles.placeholderText}>Front camera device unavailable.</Text>
+      </View>
+    );
+  }
+
+  if (enableNativeTracking && bindings && modelPath) {
+    return (
+      <NativeMediapipeCamera
+        bindings={bindings}
+        modelPath={modelPath}
+        onSnapshot={onSnapshot}
+        onRuntimeError={onRuntimeError}
+      />
+    );
+  }
+
+  return (
+    <View style={styles.fill}>
+      <Camera
+        style={styles.fill}
+        device={device}
+        isActive
+        photo={false}
+        video={false}
+        audio={false}
+      />
+      <View style={styles.overlay}>
+        <Text style={styles.overlayText}>Preview only</Text>
+        <Text style={styles.overlaySubtext}>
+          MediaPipe stays mocked until the dev-client native detector is prebuilt.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  fill: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#12131A',
+  },
+  center: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  placeholderText: {
+    color: '#8888A0',
+    textAlign: 'center',
+  },
+  overlay: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    left: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(11, 11, 18, 0.84)',
+    padding: 12,
+    gap: 4,
+  },
+  overlayText: {
+    color: '#F5F5FA',
+    fontWeight: '700',
+  },
+  overlaySubtext: {
+    color: '#B7B7C9',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+});
