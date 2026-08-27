@@ -3,6 +3,7 @@ import type { ExpoConfig } from 'expo/config';
 const config: ExpoConfig = {
   name: 'Kommuni',
   slug: 'kommuni',
+  owner: 'hauerwang77s-team',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
@@ -43,7 +44,8 @@ const config: ExpoConfig = {
         enableMicrophonePermission: false,
       },
     ],
-    'onnxruntime-react-native',
+    // onnxruntime-react-native is not linked yet: 1.24.x fails Gradle 9 (Expo 57)
+    // with VersionNumber. The app uses a pure-TS VAE until a compatible ORT release.
     // react-native-mediapipe has no Expo config plugin. The remaining native step is
     // prebuild/manual Android+iOS detector wiring plus resolving face_landmarker.task to a native file path.
     'expo-file-system',
@@ -54,7 +56,7 @@ const config: ExpoConfig = {
   },
   extra: {
     eas: {
-      projectId: 'kommuni-research-prototype',
+      projectId: '34062994-e652-4ccb-b7db-0483a5e58c88',
     },
     // A bundle-relative string is useful for config, but the native detector still needs a
     // real file/content URI after prebuild or explicit asset-copy setup in the dev client build.
