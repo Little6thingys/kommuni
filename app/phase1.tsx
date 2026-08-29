@@ -23,6 +23,7 @@ import { latentToAudioParams } from '@/ml/musicTheoryMask';
 import { TouchPoint } from '@/ml/touchFeatureExtraction';
 import { metricsStore } from '@/metrics/MetricsStore';
 import { setPhase1Latent } from '@/session/phaseLatentStore';
+import { isDemoMode } from '@/session/demoModeStore';
 import { TouchLatent } from '@/types';
 
 const NOTE_THROTTLE_MS = 110;
@@ -90,12 +91,16 @@ export default function Phase1Screen() {
     [ingestTouchSample, isReady, playNote],
   );
 
-  const handleTransitionComplete = useCallback(() => {
+  const goToPhase2 = useCallback(() => {
     setPhase1Latent(latent.z);
-    fsm.completeTransition();
     stop();
-    router.replace('/phase2');
-  }, [fsm.completeTransition, latent.z, router, stop]);
+    router.replace(isDemoMode() ? '/demo' : '/phase2');
+  }, [latent.z, router, stop]);
+
+  const handleTransitionComplete = useCallback(() => {
+    fsm.completeTransition();
+    goToPhase2();
+  }, [fsm.completeTransition, goToPhase2]);
 
   const onCanvasLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -166,13 +171,12 @@ export default function Phase1Screen() {
         ) : null}
 
         <Pressable
-          onPress={() => {
-            setPhase1Latent(latent.z);
-            router.push('/phase2');
-          }}
+          onPress={goToPhase2}
           style={({ pressed }) => [styles.skipLink, pressed && styles.skipPressed]}
         >
-          <Text style={styles.skipText}>Skip to Phase 2 (debug)</Text>
+          <Text style={styles.skipText}>
+            {isDemoMode() ? 'Skip to Phase 2 (demo)' : 'Skip to Phase 2 (debug)'}
+          </Text>
         </Pressable>
       </View>
     </SafeAreaView>

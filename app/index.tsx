@@ -7,6 +7,7 @@ import { HiddenAudioEngineWebView } from '@/components/HiddenAudioEngineWebView'
 import { ScreenShell } from '@/components/ScreenShell';
 import { useAudioEngine } from '@/hooks/useAudioEngine';
 import { buildSyntheticModels } from '@/ml/modelBuilder';
+import { setDemoMode } from '@/session/demoModeStore';
 
 type InitStep = {
   label: string;
@@ -112,14 +113,29 @@ export default function SetupScreen() {
       <View style={styles.nav}>
         {canEnterPhase1 ? (
           <Pressable
-            onPress={() => router.push('/phase1')}
-            style={({ pressed }) => [styles.primaryLinkWrap, pressed && styles.pressed]}
+            onPress={() => {
+              setDemoMode(true);
+              router.push('/phase1');
+            }}
+            style={({ pressed }) => [styles.demoButton, pressed && styles.pressed]}
           >
-            <Text style={styles.link}>Continue to Phase 1 →</Text>
+            <Text style={styles.demoButtonText}>DEMO</Text>
+            <Text style={styles.demoButtonHint}>从 Phase 1 触摸互动开始</Text>
           </Pressable>
         ) : (
           <Text style={styles.linkDisabled}>Waiting for models + audio…</Text>
         )}
+        {canEnterPhase1 ? (
+          <Pressable
+            onPress={() => {
+              setDemoMode(false);
+              router.push('/phase1');
+            }}
+            style={({ pressed }) => [styles.primaryLinkWrap, pressed && styles.pressed]}
+          >
+            <Text style={styles.link}>Continue to Phase 1 →</Text>
+          </Pressable>
+        ) : null}
         <Link href="/datalog" style={styles.linkSecondary}>
           Data & Log
         </Link>
@@ -194,6 +210,25 @@ const styles = StyleSheet.create({
   nav: {
     marginTop: 24,
     gap: 12,
+  },
+  demoButton: {
+    borderRadius: 16,
+    backgroundColor: '#7EB6FF',
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    gap: 4,
+  },
+  demoButtonText: {
+    color: '#0B0B12',
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  demoButtonHint: {
+    color: '#0B0B12',
+    fontSize: 13,
+    fontWeight: '600',
+    opacity: 0.75,
   },
   primaryLinkWrap: {
     alignSelf: 'flex-start',

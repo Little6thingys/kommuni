@@ -10,6 +10,7 @@ type MetricsDebugOverlayProps = {
   fsm?: string | null;
   gazeAngle?: number | null;
   consonance?: number | null;
+  transparent?: boolean;
 };
 
 function formatOptional(value: number | null | undefined, digits: number): string {
@@ -22,13 +23,17 @@ export function MetricsDebugOverlay({
   fsm,
   gazeAngle,
   consonance,
+  transparent = false,
 }: MetricsDebugOverlayProps) {
   const { entries, summary } = useMetricsStore();
   const recent = [...entries].slice(-MAX_ROWS).reverse();
   const resolvedLatency = latencyMs ?? summary.avgAudioLatencyMs;
 
   return (
-    <View style={styles.container} pointerEvents="none">
+    <View
+      style={[styles.container, transparent && styles.containerTransparent]}
+      pointerEvents="none"
+    >
       <Text style={styles.title}>Debug</Text>
       <Text style={styles.row}>Latency {formatOptional(resolvedLatency, 1)} ms</Text>
       {stress != null ? <Text style={styles.row}>Stress {stress.toFixed(2)}</Text> : null}
@@ -69,6 +74,13 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     gap: 3,
     minWidth: 168,
+  },
+  containerTransparent: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    minWidth: 0,
   },
   title: {
     color: '#C8C8D8',

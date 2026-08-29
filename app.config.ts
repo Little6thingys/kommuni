@@ -5,7 +5,7 @@ const config: ExpoConfig = {
   slug: 'kommuni',
   owner: 'hauerwang77s-team',
   version: '1.0.0',
-  orientation: 'portrait',
+  orientation: 'landscape',
   icon: './assets/icon.png',
   userInterfaceStyle: 'dark',
   scheme: 'kommuni',
@@ -36,6 +36,7 @@ const config: ExpoConfig = {
   plugins: [
     'expo-router',
     'expo-dev-client',
+    'expo-asset',
     [
       'react-native-vision-camera',
       {
@@ -61,6 +62,8 @@ const config: ExpoConfig = {
     // A bundle-relative string is useful for config, but the native detector still needs a
     // real file/content URI after prebuild or explicit asset-copy setup in the dev client build.
     faceLandmarkerModelPath: './assets/models/face_landmarker.task',
+    // Landscape tablet manual correction when auto uiRotation is wrong (try -90, 90, 180, 0).
+    cameraPreviewRotationDeg: -90,
   },
 };
 

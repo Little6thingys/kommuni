@@ -13,6 +13,7 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: '#0B0B12' },
         }}
       >
+        <Stack.Screen name="demo" options={{ headerShown: false }} />
         <Stack.Screen name="index" options={{ title: 'Setup' }} />
         <Stack.Screen name="phase1" options={{ title: 'Phase 1 — Touch' }} />
         <Stack.Screen name="phase2" options={{ title: 'Phase 2 — Dyadic' }} />

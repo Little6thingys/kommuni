@@ -1,7 +1,9 @@
-import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { Camera, type CameraDevice } from 'react-native-vision-camera';
+import Constants from 'expo-constants';
+import { useEffect, useMemo, useState } from 'react';
+import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import { Camera, type CameraDevice, type CameraProps } from 'react-native-vision-camera';
 
+import { normalizeModelPathForMediaPipe } from '@/ml/resolveFaceLandmarkerModel';
 import type { GazeSnapshot } from '@/types';
 
 type GazeTrackingPreviewProps = {
@@ -10,17 +12,19 @@ type GazeTrackingPreviewProps = {
   modelPath: string | null;
   onSnapshot: (snapshot: GazeSnapshot) => void;
   onRuntimeError: (message: string) => void;
+  resizeMode?: 'cover' | 'contain';
+  edgeToEdge?: boolean;
+};
+
+type MediaPipeSolution = {
+  frameProcessor: NonNullable<CameraProps['frameProcessor']>;
+  cameraViewLayoutChangeHandler: (event: LayoutChangeEvent) => void;
+  cameraDeviceChangeHandler: (device: CameraDevice | undefined) => void;
 };
 
 type MediaPipeBindings = {
-  Delegate: { GPU: number };
+  Delegate: { CPU: number; GPU: number };
   RunningMode: { LIVE_STREAM: number };
-  MediapipeCamera: React.ComponentType<{
-    style: object;
-    solution: object;
-    activeCamera?: 'front' | 'back';
-    resizeMode?: 'cover' | 'contain';
-  }>;
   useFaceLandmarkDetection: (
     onResults: (
       result: {
@@ -43,8 +47,36 @@ type MediaPipeBindings = {
       delegate?: number;
       mirrorMode?: 'no-mirror' | 'mirror' | 'mirror-front-only';
     },
-  ) => object;
+  ) => MediaPipeSolution;
 };
+
+function getCameraPreviewRotationDeg(): number {
+  const value = Constants.expoConfig?.extra?.cameraPreviewRotationDeg;
+  return typeof value === 'number' ? value : 0;
+}
+
+function buildPreviewTransform(
+  rotationDeg: number,
+  layout: { width: number; height: number },
+) {
+  if (rotationDeg === 0) {
+    return undefined;
+  }
+
+  const normalized = ((rotationDeg % 360) + 360) % 360;
+  const isSideways = normalized === 90 || normalized === 270;
+  const scale =
+    isSideways && layout.width > 0 && layout.height > 0
+      ? Math.max(layout.width / layout.height, layout.height / layout.width)
+      : 1;
+
+  return {
+    transform: [
+      { rotate: `${rotationDeg}deg` },
+      ...(scale !== 1 ? [{ scale }] : []),
+    ],
+  };
+}
 
 function loadMediaPipeBindings(): MediaPipeBindings | null {
   try {
@@ -143,18 +175,65 @@ function deriveSnapshot(
   };
 }
 
+function VisionCameraPreview({
+  device,
+  frameProcessor,
+  onLayout,
+  resizeMode = 'cover',
+}: {
+  device: CameraDevice;
+  frameProcessor?: CameraProps['frameProcessor'];
+  onLayout?: (event: LayoutChangeEvent) => void;
+  resizeMode?: 'cover' | 'contain';
+}) {
+  const [uiRotation, setUiRotation] = useState(0);
+  const [layout, setLayout] = useState({ width: 1, height: 1 });
+  const configRotation = getCameraPreviewRotationDeg();
+  // Manual config overrides auto uiRotation to avoid stacking two corrections.
+  const rotationDeg = configRotation !== 0 ? configRotation : uiRotation;
+
+  return (
+    <View
+      style={styles.previewHost}
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        setLayout({ width, height });
+        onLayout?.(event);
+      }}
+    >
+      <Camera
+        style={[StyleSheet.absoluteFill, buildPreviewTransform(rotationDeg, layout)]}
+        device={device}
+        isActive
+        photo={false}
+        video={false}
+        audio={false}
+        pixelFormat={frameProcessor ? 'rgb' : undefined}
+        resizeMode={resizeMode}
+        androidPreviewViewType="texture-view"
+        onUIRotationChanged={configRotation === 0 ? setUiRotation : undefined}
+        frameProcessor={frameProcessor}
+      />
+    </View>
+  );
+}
+
 function NativeMediapipeCamera({
   bindings,
+  device,
   modelPath,
   onSnapshot,
   onRuntimeError,
+  resizeMode = 'cover',
 }: {
   bindings: MediaPipeBindings;
+  device: CameraDevice;
   modelPath: string;
   onSnapshot: (snapshot: GazeSnapshot) => void;
   onRuntimeError: (message: string) => void;
+  resizeMode?: 'cover' | 'contain';
 }) {
-  const { Delegate, MediapipeCamera, RunningMode, useFaceLandmarkDetection } = bindings;
+  const { Delegate, RunningMode, useFaceLandmarkDetection } = bindings;
 
   const onResults = useMemo(
     () =>
@@ -180,9 +259,9 @@ function NativeMediapipeCamera({
       onRuntimeError(error.message || 'MediaPipe detector failed to start.');
     },
     RunningMode.LIVE_STREAM,
-    modelPath,
+    normalizeModelPathForMediaPipe(modelPath),
     {
-      delegate: Delegate.GPU,
+      delegate: Delegate.CPU,
       mirrorMode: 'mirror-front-only',
       numFaces: 1,
       minFaceDetectionConfidence: 0.6,
@@ -191,12 +270,16 @@ function NativeMediapipeCamera({
     },
   );
 
+  useEffect(() => {
+    solution.cameraDeviceChangeHandler(device);
+  }, [device, solution]);
+
   return (
-    <MediapipeCamera
-      style={styles.fill}
-      solution={solution}
-      activeCamera="front"
-      resizeMode="cover"
+    <VisionCameraPreview
+      device={device}
+      frameProcessor={solution.frameProcessor}
+      onLayout={solution.cameraViewLayoutChangeHandler}
+      resizeMode={resizeMode}
     />
   );
 }
@@ -207,6 +290,8 @@ export function GazeTrackingPreview({
   modelPath,
   onSnapshot,
   onRuntimeError,
+  resizeMode = 'cover',
+  edgeToEdge = false,
 }: GazeTrackingPreviewProps) {
   const bindings = useMemo(() => {
     if (!enableNativeTracking || !modelPath) {
@@ -220,9 +305,11 @@ export function GazeTrackingPreview({
     return loaded;
   }, [enableNativeTracking, modelPath, onRuntimeError]);
 
+  const containerStyle = edgeToEdge ? styles.fillEdgeToEdge : styles.fill;
+
   if (!device) {
     return (
-      <View style={[styles.fill, styles.center]}>
+      <View style={[containerStyle, styles.center]}>
         <Text style={styles.placeholderText}>Front camera device unavailable.</Text>
       </View>
     );
@@ -230,25 +317,22 @@ export function GazeTrackingPreview({
 
   if (enableNativeTracking && bindings && modelPath) {
     return (
-      <NativeMediapipeCamera
-        bindings={bindings}
-        modelPath={modelPath}
-        onSnapshot={onSnapshot}
-        onRuntimeError={onRuntimeError}
-      />
+      <View style={containerStyle}>
+        <NativeMediapipeCamera
+          bindings={bindings}
+          device={device}
+          modelPath={modelPath}
+          onSnapshot={onSnapshot}
+          onRuntimeError={onRuntimeError}
+          resizeMode={resizeMode}
+        />
+      </View>
     );
   }
 
   return (
-    <View style={styles.fill}>
-      <Camera
-        style={styles.fill}
-        device={device}
-        isActive
-        photo={false}
-        video={false}
-        audio={false}
-      />
+    <View style={containerStyle}>
+      <VisionCameraPreview device={device} resizeMode={resizeMode} />
       <View style={styles.overlay}>
         <Text style={styles.overlayText}>Preview only</Text>
         <Text style={styles.overlaySubtext}>
@@ -262,7 +346,23 @@ export function GazeTrackingPreview({
 const styles = StyleSheet.create({
   fill: {
     flex: 1,
+    width: '100%',
+    height: '100%',
     borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#12131A',
+  },
+  fillEdgeToEdge: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    overflow: 'hidden',
+    backgroundColor: '#12131A',
+  },
+  previewHost: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
     overflow: 'hidden',
     backgroundColor: '#12131A',
   },

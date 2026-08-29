@@ -4,6 +4,10 @@ import { Linking } from 'react-native';
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 
 import { GazeSnapshot } from '@/types';
+import {
+  isResolvedNativeAssetPath,
+  resolveFaceLandmarkerModelPath,
+} from '@/ml/resolveFaceLandmarkerModel';
 
 const MOCK_GAZE: GazeSnapshot = {
   gazeAngle: 25,
@@ -31,12 +35,7 @@ function getMediaPipeModule(): object | null {
   }
 }
 
-function isResolvedNativeAssetPath(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    /^(file:\/\/|content:\/\/|\/|[A-Za-z]:\\)/.test(value)
-  );
-}
+type ModelPathStatus = 'idle' | 'resolving' | 'ready' | 'error';
 
 export type UseGazeTrackingResult = {
   snapshot: GazeSnapshot;
@@ -63,13 +62,15 @@ export type UseGazeTrackingResult = {
 export function useGazeTracking(): UseGazeTrackingResult {
   const [nativeSnapshot, setNativeSnapshot] = useState<GazeSnapshot | null>(null);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [modelPath, setModelPath] = useState<string | null>(null);
+  const [modelPathStatus, setModelPathStatus] = useState<ModelPathStatus>('idle');
+  const [modelPathError, setModelPathError] = useState<string | null>(null);
+  const [nativeTrackingArmed, setNativeTrackingArmed] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState(() =>
     Camera.getCameraPermissionStatus(),
   );
   const cameraPermission = useCameraPermission();
   const cameraDevice = useCameraDevice('front');
-  const modelPath =
-    (Constants.expoConfig?.extra?.faceLandmarkerModelPath as string | undefined) ?? null;
   const mediaPipeModule = useMemo(() => getMediaPipeModule(), []);
   const isExpoGo = Constants.executionEnvironment === 'storeClient';
   const modelPathResolved = isResolvedNativeAssetPath(modelPath);
@@ -103,9 +104,15 @@ export function useGazeTracking(): UseGazeTrackingResult {
       next.push('Frame processors require an Expo Dev Client or native build, not Expo Go.');
     }
     if (!modelPathResolved) {
-      next.push(
-        'The configured MediaPipe model path is still a bundle-relative string; the detector needs a native-readable file path after prebuild/asset resolution.',
-      );
+      if (modelPathStatus === 'resolving') {
+        next.push('Resolving face_landmarker.task to a native-readable file path…');
+      } else if (modelPathError) {
+        next.push(modelPathError);
+      } else {
+        next.push(
+          'The MediaPipe model path is not ready yet; face_landmarker.task must be bundled and resolved at runtime.',
+        );
+      }
     }
     if (runtimeError) {
       next.push(runtimeError);
@@ -117,6 +124,8 @@ export function useGazeTracking(): UseGazeTrackingResult {
     isExpoGo,
     mediaPipeModule,
     modelPathResolved,
+    modelPathError,
+    modelPathStatus,
     permissionGranted,
     runtimeError,
   ]);
@@ -127,6 +136,7 @@ export function useGazeTracking(): UseGazeTrackingResult {
     Boolean(mediaPipeModule) &&
     !isExpoGo &&
     modelPathResolved &&
+    nativeTrackingArmed &&
     !runtimeError;
 
   const status: GazeTrackingStatus = useMemo(() => {
@@ -190,6 +200,53 @@ export function useGazeTracking(): UseGazeTrackingResult {
   const setNativeError = useCallback((message: string) => {
     setRuntimeError(message);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setModelPathStatus('resolving');
+    setModelPathError(null);
+
+    void resolveFaceLandmarkerModelPath()
+      .then((resolvedPath) => {
+        if (cancelled) {
+          return;
+        }
+        setModelPath(resolvedPath);
+        setModelPathStatus('ready');
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
+        }
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Failed to resolve face_landmarker.task for MediaPipe.';
+        setModelPath(null);
+        setModelPathStatus('error');
+        setModelPathError(message);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!modelPathResolved) {
+      setNativeTrackingArmed(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setNativeTrackingArmed(true);
+    }, 400);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [modelPathResolved]);
 
   useEffect(() => {
     setPermissionStatus(cameraPermission.hasPermission ? 'granted' : Camera.getCameraPermissionStatus());
