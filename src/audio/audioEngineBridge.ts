@@ -4,6 +4,7 @@ import {
   AudioEngineScaleMessage,
   AudioParams,
   AudioScale,
+  DroneParams,
 } from '@/types';
 
 export const DEFAULT_AUDIO_SCALE: AudioScale = 'pentatonic';
@@ -11,27 +12,39 @@ export const DEFAULT_AUDIO_SCALE: AudioScale = 'pentatonic';
 export const AUDIO_ENGINE_SMOKE_SEQUENCE: readonly AudioParams[] = [
   {
     notes: [60],
-    overtones: [1, 0.45, 0.22],
-    filterFreq: 720,
+    overtones: [1, 0.22, 0.06],
+    filterFreq: 520,
+    latentEnergy: 0.22,
+    releaseMs: 1200,
+    cutPrevious: false,
+    calmness: 0.72,
+  },
+  {
+    notes: [64, 67],
+    overtones: [1, 0.18, 0.05],
+    filterFreq: 480,
     latentEnergy: 0.28,
+    releaseMs: 1400,
+    cutPrevious: false,
+    calmness: 0.8,
   },
   {
-    notes: [64],
-    overtones: [1, 0.38, 0.2],
-    filterFreq: 880,
-    latentEnergy: 0.35,
+    notes: [60, 64, 67],
+    overtones: [1, 0.14, 0.05],
+    filterFreq: 420,
+    latentEnergy: 0.32,
+    releaseMs: 1800,
+    cutPrevious: false,
+    calmness: 0.9,
   },
   {
-    notes: [67],
-    overtones: [1, 0.5, 0.26, 0.12],
-    filterFreq: 1040,
-    latentEnergy: 0.42,
-  },
-  {
-    notes: [72],
-    overtones: [1, 0.35, 0.18],
-    filterFreq: 1260,
+    notes: [67, 69, 72],
+    overtones: [1, 0.12, 0.04],
+    filterFreq: 400,
     latentEnergy: 0.3,
+    releaseMs: 2000,
+    cutPrevious: false,
+    calmness: 0.95,
   },
 ];
 
@@ -56,6 +69,13 @@ export function buildScaleMessage(scale: AudioScale): AudioEngineScaleMessage {
 export function buildStopMessage(): AudioEngineMessage {
   return {
     type: 'STOP',
+  };
+}
+
+export function buildDroneMessage(payload: DroneParams): AudioEngineMessage {
+  return {
+    type: 'SET_DRONE',
+    payload,
   };
 }
 

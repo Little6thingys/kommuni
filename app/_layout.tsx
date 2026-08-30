@@ -15,8 +15,15 @@ export default function RootLayout() {
       >
         <Stack.Screen name="demo" options={{ headerShown: false }} />
         <Stack.Screen name="index" options={{ title: 'Setup' }} />
-        <Stack.Screen name="phase1" options={{ title: 'Phase 1 — Touch' }} />
-        <Stack.Screen name="phase2" options={{ title: 'Phase 2 — Dyadic' }} />
+        <Stack.Screen
+          name="phase1"
+          options={{
+            title: 'Calm Down',
+            headerShown: false,
+            contentStyle: { flex: 1, backgroundColor: '#0B0B12' },
+          }}
+        />
+        <Stack.Screen name="phase2" options={{ title: 'Play Together' }} />
         <Stack.Screen name="datalog" options={{ title: 'Data & Log' }} />
         <Stack.Screen name="benchmark" options={{ title: 'Benchmark Mode' }} />
       </Stack>

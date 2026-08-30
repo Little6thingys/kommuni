@@ -24,7 +24,7 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
     <script>
       (function () {
         const BRIDGE = window.ReactNativeWebView;
-        const NOTE_RELEASE_MS = 480;
+        const DEFAULT_RELEASE_MS = 520;
         const SCALE_MAP = {
           pentatonic: [0, 2, 4, 7, 9],
           chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
@@ -33,12 +33,25 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
         let audioContext = null;
         let masterGain = null;
         let filterNode = null;
+        let delayNode = null;
+        let delayFeedback = null;
+        let delayMix = null;
+        let dryGain = null;
         let compressor = null;
         let currentScale = 'pentatonic';
         let activeVoices = [];
 
+        let droneGain = null;
+        let droneFilter = null;
+        let droneOscillators = [];
+        let droneTarget = { rootMidi: 48, level: 0, filterFreq: 280 };
+
         function post(message) {
           BRIDGE && BRIDGE.postMessage(JSON.stringify(message));
+        }
+
+        function midiToFrequency(note) {
+          return 440 * Math.pow(2, (note - 69) / 12);
         }
 
         function ensureContext() {
@@ -47,23 +60,52 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
             audioContext = new AudioCtor();
 
             masterGain = audioContext.createGain();
-            masterGain.gain.value = 0.16;
+            masterGain.gain.value = 0.14;
 
             filterNode = audioContext.createBiquadFilter();
             filterNode.type = 'lowpass';
-            filterNode.frequency.value = 880;
-            filterNode.Q.value = 0.8;
+            filterNode.frequency.value = 620;
+            filterNode.Q.value = 0.45;
+
+            delayNode = audioContext.createDelay(1.2);
+            delayNode.delayTime.value = 0.14;
+
+            delayFeedback = audioContext.createGain();
+            delayFeedback.gain.value = 0.28;
+
+            delayMix = audioContext.createGain();
+            delayMix.gain.value = 0.34;
+
+            dryGain = audioContext.createGain();
+            dryGain.gain.value = 0.78;
 
             compressor = audioContext.createDynamicsCompressor();
-            compressor.threshold.value = -20;
-            compressor.knee.value = 20;
-            compressor.ratio.value = 8;
-            compressor.attack.value = 0.003;
-            compressor.release.value = 0.25;
+            compressor.threshold.value = -24;
+            compressor.knee.value = 24;
+            compressor.ratio.value = 4;
+            compressor.attack.value = 0.008;
+            compressor.release.value = 0.35;
 
-            filterNode.connect(masterGain);
+            filterNode.connect(dryGain);
+            filterNode.connect(delayNode);
+            delayNode.connect(delayFeedback);
+            delayFeedback.connect(delayNode);
+            delayNode.connect(delayMix);
+
+            dryGain.connect(masterGain);
+            delayMix.connect(masterGain);
             masterGain.connect(compressor);
             compressor.connect(audioContext.destination);
+
+            droneFilter = audioContext.createBiquadFilter();
+            droneFilter.type = 'lowpass';
+            droneFilter.frequency.value = 320;
+            droneFilter.Q.value = 0.35;
+
+            droneGain = audioContext.createGain();
+            droneGain.gain.value = 0.0001;
+            droneFilter.connect(droneGain);
+            droneGain.connect(masterGain);
           }
 
           if (audioContext.state === 'suspended') {
@@ -76,10 +118,6 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
           }
 
           return audioContext;
-        }
-
-        function midiToFrequency(note) {
-          return 440 * Math.pow(2, (note - 69) / 12);
         }
 
         function quantizeNote(note) {
@@ -119,23 +157,91 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
           activeVoices = [];
         }
 
+        function stopDroneOscillators() {
+          droneOscillators.forEach(function (oscillator) {
+            try {
+              oscillator.stop();
+              oscillator.disconnect();
+            } catch (error) {
+              // ignore
+            }
+          });
+          droneOscillators = [];
+        }
+
+        function setDrone(payload) {
+          const context = ensureContext();
+          const now = context.currentTime;
+          const rootMidi = quantizeNote(payload.rootMidi || 48);
+          const level = Math.max(0, Math.min(Number(payload.level) || 0, 0.5));
+          const filterFreq = Math.max(120, payload.filterFreq || 280);
+
+          droneTarget = {
+            rootMidi: rootMidi,
+            level: level,
+            filterFreq: filterFreq,
+          };
+
+          droneFilter.frequency.setTargetAtTime(filterFreq, now, 0.25);
+          droneGain.gain.setTargetAtTime(
+            level > 0.001 ? level : 0.0001,
+            now,
+            0.35
+          );
+
+          if (level <= 0.001) {
+            stopDroneOscillators();
+            return;
+          }
+
+          const frequencies = [
+            midiToFrequency(rootMidi),
+            midiToFrequency(rootMidi + 7),
+          ];
+
+          if (droneOscillators.length !== frequencies.length) {
+            stopDroneOscillators();
+            frequencies.forEach(function (frequency) {
+              const oscillator = context.createOscillator();
+              oscillator.type = 'sine';
+              oscillator.frequency.setValueAtTime(frequency, now);
+              oscillator.connect(droneFilter);
+              oscillator.start(now);
+              droneOscillators.push(oscillator);
+            });
+            return;
+          }
+
+          droneOscillators.forEach(function (oscillator, index) {
+            oscillator.frequency.setTargetAtTime(frequencies[index], now, 0.3);
+          });
+        }
+
         function playNote(payload) {
           const startedAt = performance.now();
           const context = ensureContext();
           const now = context.currentTime;
+          const calmness = Math.max(0, Math.min(payload.calmness ?? 0.35, 1));
           const latentEnergy = Math.max(0, Math.min(payload.latentEnergy || 0, 1));
           const notes = Array.isArray(payload.notes) ? payload.notes : [];
           const overtones = Array.isArray(payload.overtones) && payload.overtones.length
             ? payload.overtones
             : [1];
+          const releaseMs = Math.max(
+            220,
+            Math.min(payload.releaseMs || DEFAULT_RELEASE_MS, 2400)
+          );
+          const cutPrevious = payload.cutPrevious !== false;
 
           filterNode.frequency.setTargetAtTime(
-            Math.max(140, payload.filterFreq || 880),
+            Math.max(180, payload.filterFreq || 620),
             now,
-            0.015
+            0.04
           );
 
-          stopAllVoices();
+          if (cutPrevious) {
+            stopAllVoices();
+          }
 
           notes.forEach(function (rawNote) {
             const note = quantizeNote(rawNote);
@@ -145,36 +251,44 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
 
             const oscillators = overtones.map(function (strength, index) {
               const oscillator = context.createOscillator();
-              oscillator.type = index === 0 ? 'sawtooth' : 'triangle';
+              const waveform =
+                calmness > 0.45
+                  ? 'sine'
+                  : calmness > 0.2
+                    ? 'triangle'
+                    : index === 0
+                      ? 'triangle'
+                      : 'sine';
+              oscillator.type = waveform;
               oscillator.frequency.setValueAtTime(
-                baseFrequency * (index + 1),
+                baseFrequency * (index === 0 ? 1 : index + 1),
                 now
               );
               const partialGain = context.createGain();
               partialGain.gain.setValueAtTime(
-                Math.max(0.02, Math.min(Number(strength) || 0, 1)) /
+                Math.max(0.015, Math.min(Number(strength) || 0, 1)) /
                   Math.max(overtones.length, 1),
                 now
               );
               oscillator.connect(partialGain);
               partialGain.connect(voiceGain);
               oscillator.start(now);
-              oscillator.stop(now + NOTE_RELEASE_MS / 1000);
+              oscillator.stop(now + releaseMs / 1000 + 0.05);
               return oscillator;
             });
 
-            const attack = 0.01 + latentEnergy * 0.03;
-            const sustain = 0.08 + latentEnergy * 0.06;
-            const peak = 0.12 + latentEnergy * 0.14;
+            const attack = 0.02 + (1 - calmness) * 0.02;
+            const sustain = 0.05 + latentEnergy * 0.08 + calmness * 0.06;
+            const peak = 0.08 + latentEnergy * 0.12 + calmness * 0.1;
 
             voiceGain.gain.exponentialRampToValueAtTime(peak, now + attack);
             voiceGain.gain.exponentialRampToValueAtTime(
-              Math.max(0.03, sustain),
-              now + NOTE_RELEASE_MS / 1000 - 0.08
+              Math.max(0.02, sustain),
+              now + releaseMs / 1000 - 0.12
             );
             voiceGain.gain.exponentialRampToValueAtTime(
               0.0001,
-              now + NOTE_RELEASE_MS / 1000
+              now + releaseMs / 1000
             );
 
             voiceGain.connect(filterNode);
@@ -191,7 +305,7 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
               activeVoices = activeVoices.filter(function (item) {
                 return item !== voice;
               });
-            }, NOTE_RELEASE_MS + 24);
+            }, releaseMs + 40);
           });
 
           post({
@@ -231,8 +345,17 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
             return;
           }
 
+          if (payload.type === 'SET_DRONE') {
+            setDrone(payload.payload || {});
+            return;
+          }
+
           if (payload.type === 'STOP') {
             stopAllVoices();
+            stopDroneOscillators();
+            if (droneGain) {
+              droneGain.gain.setTargetAtTime(0.0001, ensureContext().currentTime, 0.1);
+            }
           }
         }
 

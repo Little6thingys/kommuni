@@ -12,6 +12,7 @@ const TICK_MS = 100;
 export type PhaseFSMViewState = {
   phase: PhaseState;
   patienceProgress: number;
+  patienceElapsedSeconds: number;
   showTransition: boolean;
   isPatienceActive: boolean;
   completeTransition: () => void;
@@ -91,6 +92,10 @@ export function usePhaseFSM(stressLevel: number): PhaseFSMViewState {
   return {
     phase,
     patienceProgress,
+    patienceElapsedSeconds: Math.min(
+      Math.floor(PATIENCE_DURATION_MS / 1000),
+      Math.floor((patienceProgress * PATIENCE_DURATION_MS) / 1000),
+    ),
     showTransition,
     isPatienceActive: phase === 'PATIENCE' && !showTransition,
     completeTransition,

@@ -11,7 +11,7 @@ describe('audioEngineBridge', () => {
   it('defines a four-note smoke sequence for the scaffolded UI', () => {
     expect(AUDIO_ENGINE_SMOKE_SEQUENCE).toHaveLength(4);
     expect(AUDIO_ENGINE_SMOKE_SEQUENCE[0]?.notes).toEqual([60]);
-    expect(AUDIO_ENGINE_SMOKE_SEQUENCE[3]?.notes).toEqual([72]);
+    expect(AUDIO_ENGINE_SMOKE_SEQUENCE[3]?.notes).toEqual([67, 69, 72]);
   });
 
   it('serializes scale messages for the WebView bridge', () => {
@@ -47,12 +47,12 @@ describe('audioEngineBridge', () => {
     const message = buildPlayNoteMessage(params!);
     expect(message).toEqual({
       type: 'PLAY_NOTE',
-      payload: {
+      payload: expect.objectContaining({
         notes: expect.any(Array),
         overtones: expect.any(Array),
         filterFreq: expect.any(Number),
         latentEnergy: expect.any(Number),
-      },
+      }),
     });
     expect(message.payload.notes.length).toBeGreaterThan(0);
   });

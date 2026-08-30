@@ -4,6 +4,7 @@ import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import {
   AUDIO_ENGINE_SMOKE_SEQUENCE,
   DEFAULT_AUDIO_SCALE,
+  buildDroneMessage,
   buildPlayNoteMessage,
   buildScaleMessage,
   buildStopMessage,
@@ -17,6 +18,7 @@ import {
   AudioEngineStatus,
   AudioParams,
   AudioScale,
+  DroneParams,
 } from '@/types';
 
 const SMOKE_NOTE_INTERVAL_MS = 320;
@@ -87,6 +89,13 @@ export function useAudioEngine() {
     (nextScale: AudioScale) => {
       setScaleState(nextScale);
       post(buildScaleMessage(nextScale));
+    },
+    [post],
+  );
+
+  const setDrone = useCallback(
+    (payload: DroneParams) => {
+      post(buildDroneMessage(payload));
     },
     [post],
   );
@@ -165,6 +174,7 @@ export function useAudioEngine() {
     playNote,
     playSmokeTestSequence,
     setScale,
+    setDrone,
     stop,
     onLoadEnd,
     onMessage,

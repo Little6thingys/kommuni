@@ -3,6 +3,18 @@ export type AudioParams = {
   overtones: number[];
   filterFreq: number;
   latentEnergy: number;
+  /** Note tail length — longer when the child is calming down. */
+  releaseMs?: number;
+  /** When false, new notes overlap for legato pads. */
+  cutPrevious?: boolean;
+  /** 0 = aroused venting, 1 = resolved calm (MelodyBridge). */
+  calmness?: number;
+};
+
+export type DroneParams = {
+  rootMidi: number;
+  level: number;
+  filterFreq: number;
 };
 
 export type AudioScale = 'pentatonic' | 'chromatic';
@@ -44,10 +56,16 @@ export type AudioEngineStopMessage = {
   type: 'STOP';
 };
 
+export type AudioEngineDroneMessage = {
+  type: 'SET_DRONE';
+  payload: DroneParams;
+};
+
 export type AudioEngineMessage =
   | AudioEnginePlayMessage
   | AudioEngineScaleMessage
-  | AudioEngineStopMessage;
+  | AudioEngineStopMessage
+  | AudioEngineDroneMessage;
 
 export type GazeSnapshot = {
   gazeAngle: number;

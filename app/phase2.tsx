@@ -1,6 +1,7 @@
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { PHASE2_GUI } from '@/copy/phaseTitles';
 import { GazeTrackingPreview } from '@/components/GazeTrackingPreview';
 import { HiddenAudioEngineWebView } from '@/components/HiddenAudioEngineWebView';
 import { MetricsDebugOverlay } from '@/components/MetricsDebugOverlay';
@@ -27,8 +28,8 @@ export default function Phase2Screen() {
 
   return (
     <ScreenShell
-      title="Phase 2"
-      subtitle="Dyadic rhythm taps fused with gaze-driven cross-attention audio"
+      title={PHASE2_GUI.title}
+      subtitle={PHASE2_GUI.description}
     >
       <View style={styles.debugSlot}>
         <MetricsDebugOverlay
@@ -48,12 +49,9 @@ export default function Phase2Screen() {
       />
 
       <View style={styles.statusCard}>
-        <Text style={styles.statusEyebrow}>Phase 2 loop</Text>
+        <Text style={styles.statusEyebrow}>{PHASE2_GUI.eyebrow}</Text>
         <Text style={styles.statusTitle}>{gaze.statusLabel}</Text>
-        <Text style={styles.statusDetail}>
-          Tap rhythm targets for both participants. HarmoniNet and cross-attention drive audio when
-          taps or joint attention change.
-        </Text>
+        <Text style={styles.statusDetail}>{PHASE2_GUI.statusDetail}</Text>
 
         <View style={styles.metricRow}>
           <View style={styles.metric}>

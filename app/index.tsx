@@ -8,6 +8,7 @@ import { ScreenShell } from '@/components/ScreenShell';
 import { useAudioEngine } from '@/hooks/useAudioEngine';
 import { buildSyntheticModels } from '@/ml/modelBuilder';
 import { setDemoMode } from '@/session/demoModeStore';
+import { SETUP_GUI } from '@/copy/phaseTitles';
 
 type InitStep = {
   label: string;
@@ -120,7 +121,7 @@ export default function SetupScreen() {
             style={({ pressed }) => [styles.demoButton, pressed && styles.pressed]}
           >
             <Text style={styles.demoButtonText}>DEMO</Text>
-            <Text style={styles.demoButtonHint}>从 Phase 1 触摸互动开始</Text>
+            <Text style={styles.demoButtonHint}>{SETUP_GUI.demoHint}</Text>
           </Pressable>
         ) : (
           <Text style={styles.linkDisabled}>Waiting for models + audio…</Text>
@@ -133,7 +134,7 @@ export default function SetupScreen() {
             }}
             style={({ pressed }) => [styles.primaryLinkWrap, pressed && styles.pressed]}
           >
-            <Text style={styles.link}>Continue to Phase 1 →</Text>
+            <Text style={styles.link}>{SETUP_GUI.continueToPhase1}</Text>
           </Pressable>
         ) : null}
         <Link href="/datalog" style={styles.linkSecondary}>

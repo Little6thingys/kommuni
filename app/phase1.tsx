@@ -7,32 +7,46 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HiddenAudioEngineWebView } from '@/components/HiddenAudioEngineWebView';
 import { MetricsDebugOverlay } from '@/components/MetricsDebugOverlay';
 import { ParticleField } from '@/components/ParticleField';
 import { PhaseTransitionOverlay } from '@/components/PhaseTransitionOverlay';
 import { TouchCanvas } from '@/components/TouchCanvas';
-import { PATIENCE_DURATION_MS, STRESS_THRESHOLD } from '@/fsm/constants';
+import { PHASE1_GUI } from '@/copy/phaseTitles';
+import { PATIENCE_DURATION_MS } from '@/fsm/constants';
 import { useAudioEngine } from '@/hooks/useAudioEngine';
 import { usePhaseFSM } from '@/hooks/usePhaseFSM';
 import { useTouchDynamicsVAE } from '@/hooks/useTouchDynamicsVAE';
 import { computeConsonanceRate } from '@/metrics/consonance';
-import { latentToAudioParams } from '@/ml/musicTheoryMask';
-import { TouchPoint } from '@/ml/touchFeatureExtraction';
 import { metricsStore } from '@/metrics/MetricsStore';
-import { setPhase1Latent } from '@/session/phaseLatentStore';
+import {
+  buildDroneParams,
+  buildMelodyBridgeAudio,
+  createMelodyBridgeState,
+  noteThrottleMs,
+  recoverStressWhenIdle,
+} from '@/ml/melodyBridge';
+import { TouchPoint } from '@/ml/touchFeatureExtraction';
 import { isDemoMode } from '@/session/demoModeStore';
+import { setPhase1Latent } from '@/session/phaseLatentStore';
 import { TouchLatent } from '@/types';
 
-const NOTE_THROTTLE_MS = 110;
+const TOUCH_IDLE_MS = 220;
+const DRONE_TICK_MS = 120;
 
 export default function Phase1Screen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { ingestTouchSample, emptyLatent } = useTouchDynamicsVAE();
+  const melodyBridgeRef = useRef(createMelodyBridgeState());
+  const hasTouchedRef = useRef(false);
+  const lastTouchAtRef = useRef(0);
   const [latent, setLatent] = useState<TouchLatent>(emptyLatent);
+  const [audioCalmness, setAudioCalmness] = useState(0);
   const [hasTouched, setHasTouched] = useState(false);
+  const [isTouching, setIsTouching] = useState(false);
   const [layout, setLayout] = useState({ width: 1, height: 1 });
   const [lastInferenceMs, setLastInferenceMs] = useState<number | null>(null);
   const [consonance, setConsonance] = useState<number | null>(null);
@@ -43,12 +57,14 @@ export default function Phase1Screen() {
     isReady,
     playNote,
     setScale,
+    setDrone,
     stop,
     onLoadEnd,
     onMessage,
   } = useAudioEngine();
 
-  const fsm = usePhaseFSM(hasTouched ? latent.stressLevel : 1);
+  const fsmStress = hasTouched && isTouching ? latent.stressLevel : 1;
+  const fsm = usePhaseFSM(fsmStress);
 
   useEffect(() => {
     if (isReady) {
@@ -56,14 +72,70 @@ export default function Phase1Screen() {
     }
   }, [isReady, setScale]);
 
+  useEffect(() => {
+    if (isReady) {
+      setDrone(buildDroneParams(melodyBridgeRef.current, false));
+    }
+  }, [isReady, setDrone]);
+
+  useEffect(() => {
+    return () => {
+      stop();
+    };
+  }, [stop]);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      const bridge = melodyBridgeRef.current;
+      const idleMs = Date.now() - lastTouchAtRef.current;
+      const touching =
+        hasTouchedRef.current &&
+        lastTouchAtRef.current > 0 &&
+        idleMs <= TOUCH_IDLE_MS;
+
+      setIsTouching(touching);
+
+      if (!hasTouchedRef.current) {
+        if (isReady) {
+          setDrone(buildDroneParams(bridge, false));
+        }
+        return;
+      }
+
+      if (!touching) {
+        recoverStressWhenIdle(bridge);
+        setAudioCalmness(1 - bridge.smoothedStress);
+        if (isReady) {
+          setDrone(buildDroneParams(bridge, false));
+        }
+        return;
+      }
+
+      setAudioCalmness(1 - bridge.smoothedStress);
+      if (isReady) {
+        setDrone(buildDroneParams(bridge, true));
+      }
+    }, DRONE_TICK_MS);
+
+    return () => clearInterval(intervalId);
+  }, [isReady, setDrone]);
+
   const handleTouchSample = useCallback(
     (sample: [number, number, number, number, number], _point: TouchPoint) => {
       const startedAt = performance.now();
       const result = ingestTouchSample(sample);
       const inferenceMs = performance.now() - startedAt;
-      const audioParams = latentToAudioParams(result.z, result.stressLevel);
+      const audioParams = buildMelodyBridgeAudio(
+        result.z,
+        result.stressLevel,
+        melodyBridgeRef.current,
+      );
+      lastTouchAtRef.current = Date.now();
+      hasTouchedRef.current = true;
+      setIsTouching(true);
       setHasTouched(true);
       setLatent(result);
+      setAudioCalmness(1 - melodyBridgeRef.current.smoothedStress);
       setPhase1Latent(result.z);
       setLastInferenceMs(inferenceMs);
       setConsonance(computeConsonanceRate(audioParams.notes));
@@ -80,15 +152,18 @@ export default function Phase1Screen() {
         return;
       }
 
+      setDrone(buildDroneParams(melodyBridgeRef.current, true));
+
+      const throttleMs = noteThrottleMs(melodyBridgeRef.current.smoothedStress);
       const now = Date.now();
-      if (now - lastNoteAtRef.current < NOTE_THROTTLE_MS) {
+      if (now - lastNoteAtRef.current < throttleMs) {
         return;
       }
 
       lastNoteAtRef.current = now;
       playNote(audioParams);
     },
-    [ingestTouchSample, isReady, playNote],
+    [ingestTouchSample, isReady, playNote, setDrone],
   );
 
   const goToPhase2 = useCallback(() => {
@@ -107,141 +182,240 @@ export default function Phase1Screen() {
     setLayout({ width, height });
   }, []);
 
+  const handleBack = useCallback(() => {
+    stop();
+    router.back();
+  }, [router, stop]);
+
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <HiddenAudioEngineWebView
-        webViewRef={webViewRef}
-        onMessage={onMessage}
-        onLoadEnd={onLoadEnd}
-      />
-
-      <View style={styles.header}>
-        <Text style={styles.title}>Phase 1</Text>
-        <Text style={styles.subtitle}>
-          Touch the canvas — calm below {STRESS_THRESHOLD.toFixed(2)} stress for{' '}
-          {PATIENCE_DURATION_MS / 1000}s to enter Phase 2.
-        </Text>
-      </View>
-
-      <View style={styles.canvasWrap} onLayout={onCanvasLayout}>
-        <TouchCanvas
-          stressLevel={latent.stressLevel}
-          z={latent.z}
-          onSample={handleTouchSample}
-        />
-        <ParticleField z={latent.z} stressLevel={latent.stressLevel} />
-        <PhaseTransitionOverlay
-          active={fsm.showTransition}
-          width={layout.width}
-          height={layout.height}
-          onComplete={handleTransitionComplete}
-        />
-        <View style={styles.debugWrap} pointerEvents="none">
-          <MetricsDebugOverlay
-            latencyMs={lastInferenceMs}
-            stress={latent.stressLevel}
-            fsm={fsm.phase}
-            consonance={consonance}
+    <View style={styles.root}>
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
+        <View style={styles.stage} onLayout={onCanvasLayout}>
+          <TouchCanvas
+            stressLevel={latent.stressLevel}
+            z={latent.z}
+            onSample={handleTouchSample}
+            edgeToEdge
+            showLatentBars
+            latentBarBottomReserve={68}
           />
-        </View>
-      </View>
 
-      <View style={styles.footer}>
-        <View style={styles.metricRow}>
-          <View style={styles.metric}>
-            <Text style={styles.metricLabel}>Stress</Text>
-            <Text style={styles.metricValue}>{latent.stressLevel.toFixed(2)}</Text>
-          </View>
-          <View style={styles.metric}>
-            <Text style={styles.metricLabel}>FSM</Text>
-            <Text style={styles.metricValue}>{fsm.phase}</Text>
-          </View>
-          <View style={styles.metric}>
-            <Text style={styles.metricLabel}>Audio</Text>
-            <Text style={styles.metricValue}>{isReady ? 'Ready' : 'Loading'}</Text>
-          </View>
-        </View>
-
-        {fsm.isPatienceActive ? (
-          <View style={styles.patienceTrack}>
-            <View
-              style={[styles.patienceFill, { width: `${fsm.patienceProgress * 100}%` }]}
+          <View style={styles.overlayLayer} pointerEvents="none">
+            <ParticleField
+              z={latent.z}
+              stressLevel={latent.stressLevel}
+              width={layout.width}
+              height={layout.height}
+              vivid
+            />
+            <PhaseTransitionOverlay
+              active={fsm.showTransition}
+              width={layout.width}
+              height={layout.height}
+              onComplete={handleTransitionComplete}
             />
           </View>
-        ) : null}
 
-        <Pressable
-          onPress={goToPhase2}
-          style={({ pressed }) => [styles.skipLink, pressed && styles.skipPressed]}
-        >
-          <Text style={styles.skipText}>
-            {isDemoMode() ? 'Skip to Phase 2 (demo)' : 'Skip to Phase 2 (debug)'}
-          </Text>
-        </Pressable>
+          <View
+            style={[styles.topBar, { paddingTop: insets.top + 6 }]}
+            pointerEvents="box-none"
+          >
+            <Pressable
+              onPress={handleBack}
+              style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
+              hitSlop={8}
+            >
+              <Text style={styles.backButtonText}>← Back</Text>
+            </Pressable>
+            <View style={styles.topBarCopy} pointerEvents="none">
+              <Text style={styles.title}>{PHASE1_GUI.title}</Text>
+              <Text style={styles.subtitle} numberOfLines={2}>
+                {PHASE1_GUI.description}
+              </Text>
+              <Text style={styles.hint}>{PHASE1_GUI.hint}</Text>
+            </View>
+          </View>
+
+          <View style={styles.debugWrap} pointerEvents="none">
+            <MetricsDebugOverlay
+              latencyMs={lastInferenceMs}
+              stress={latent.stressLevel}
+              fsm={fsm.phase}
+              consonance={consonance}
+            />
+          </View>
+
+          <View style={styles.footerOverlay} pointerEvents="box-none">
+            <View style={styles.calmMetric} pointerEvents="none">
+              <Text style={styles.metricLabel}>Calm</Text>
+              <View style={styles.metricRow}>
+                <Text style={styles.metricValue}>{audioCalmness.toFixed(2)}</Text>
+                <Text
+                  style={[
+                    styles.gentleSeconds,
+                    fsm.patienceElapsedSeconds > 0 && styles.gentleSecondsActive,
+                  ]}
+                >
+                  {fsm.patienceElapsedSeconds}s / {PATIENCE_DURATION_MS / 1000}s
+                </Text>
+              </View>
+            </View>
+
+            {fsm.isPatienceActive ? (
+              <View style={styles.patienceTrack} pointerEvents="none">
+                <View
+                  style={[
+                    styles.patienceFill,
+                    { width: `${fsm.patienceProgress * 100}%` },
+                  ]}
+                />
+              </View>
+            ) : null}
+
+            <Pressable
+              onPress={goToPhase2}
+              style={({ pressed }) => [styles.skipLink, pressed && styles.skipPressed]}
+            >
+              <Text style={styles.skipText}>
+                {isDemoMode() ? 'Skip to Phase 2 (demo)' : 'Skip to Phase 2 (debug)'}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </SafeAreaView>
+
+      <View style={styles.hiddenAudio} pointerEvents="none">
+        <HiddenAudioEngineWebView
+          webViewRef={webViewRef}
+          onMessage={onMessage}
+          onLoadEnd={onLoadEnd}
+        />
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#0B0B12',
+  },
   safe: {
     flex: 1,
     backgroundColor: '#0B0B12',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
   },
-  header: {
-    paddingTop: 8,
-    paddingBottom: 12,
-    gap: 6,
+  stage: {
+    flex: 1,
+    minHeight: 0,
+    backgroundColor: '#0B0B12',
+  },
+  overlayLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 5,
+  },
+  hiddenAudio: {
+    position: 'absolute',
+    top: -1000,
+    left: 0,
+    width: 1,
+    height: 1,
+    opacity: 0,
+    overflow: 'hidden',
+  },
+  topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+    backgroundColor: 'rgba(11, 11, 18, 0.78)',
+    zIndex: 20,
+  },
+  backButton: {
+    paddingTop: 2,
+    paddingRight: 4,
+  },
+  backPressed: {
+    opacity: 0.7,
+  },
+  backButtonText: {
+    color: '#7EB6FF',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  topBarCopy: {
+    flex: 1,
+    gap: 2,
+    paddingTop: 1,
   },
   title: {
     color: '#F5F5FA',
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: '700',
   },
   subtitle: {
     color: '#8888A0',
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 16,
   },
-  canvasWrap: {
-    flex: 1,
-    minHeight: 360,
-    borderRadius: 16,
-    overflow: 'hidden',
+  hint: {
+    color: '#7EB6FF',
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2,
   },
   debugWrap: {
     position: 'absolute',
-    top: 8,
+    top: 72,
     right: 8,
     zIndex: 30,
-    maxWidth: 220,
+    maxWidth: 200,
   },
-  footer: {
-    marginTop: 12,
-    gap: 10,
+  footerOverlay: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    bottom: 0,
+    zIndex: 20,
+    gap: 4,
+  },
+  calmMetric: {
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    backgroundColor: 'rgba(21, 21, 34, 0.92)',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    gap: 1,
+    minWidth: 168,
   },
   metricRow: {
     flexDirection: 'row',
-    gap: 10,
-  },
-  metric: {
-    flex: 1,
-    borderRadius: 10,
-    backgroundColor: '#151522',
-    padding: 10,
-    gap: 2,
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 12,
   },
   metricLabel: {
     color: '#8888A0',
-    fontSize: 11,
+    fontSize: 10,
     textTransform: 'uppercase',
   },
   metricValue: {
     color: '#F5F5FA',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
+  },
+  gentleSeconds: {
+    color: '#666680',
+    fontSize: 12,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
+  gentleSecondsActive: {
+    color: '#7EB6FF',
   },
   patienceTrack: {
     height: 6,
@@ -256,13 +430,13 @@ const styles = StyleSheet.create({
   },
   skipLink: {
     alignSelf: 'flex-start',
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
   skipPressed: {
     opacity: 0.7,
   },
   skipText: {
     color: '#666680',
-    fontSize: 13,
+    fontSize: 12,
   },
 });

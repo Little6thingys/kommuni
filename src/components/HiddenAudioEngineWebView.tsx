@@ -28,6 +28,7 @@ export function HiddenAudioEngineWebView({
       bounces={false}
       showsHorizontalScrollIndicator={false}
       showsVerticalScrollIndicator={false}
+      pointerEvents="none"
       style={styles.hidden}
     />
   );
