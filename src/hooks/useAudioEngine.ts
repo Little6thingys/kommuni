@@ -5,7 +5,9 @@ import {
   AUDIO_ENGINE_SMOKE_SEQUENCE,
   DEFAULT_AUDIO_SCALE,
   buildDroneMessage,
+  buildPauseMessage,
   buildPlayNoteMessage,
+  buildResumeMessage,
   buildScaleMessage,
   buildStopMessage,
   parseAudioEngineEvent,
@@ -83,6 +85,14 @@ export function useAudioEngine() {
     smokeTimeoutsRef.current.forEach(clearTimeout);
     smokeTimeoutsRef.current = [];
     post(buildStopMessage());
+  }, [post]);
+
+  const pause = useCallback(() => {
+    post(buildPauseMessage());
+  }, [post]);
+
+  const resume = useCallback(() => {
+    post(buildResumeMessage());
   }, [post]);
 
   const setScale = useCallback(
@@ -173,6 +183,8 @@ export function useAudioEngine() {
     isReady,
     playNote,
     playSmokeTestSequence,
+    pause,
+    resume,
     setScale,
     setDrone,
     stop,

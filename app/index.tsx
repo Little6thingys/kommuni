@@ -5,10 +5,11 @@ import { useCameraPermission } from 'react-native-vision-camera';
 
 import { HiddenAudioEngineWebView } from '@/components/HiddenAudioEngineWebView';
 import { ScreenShell } from '@/components/ScreenShell';
+import { SETUP_GUI } from '@/copy/phaseTitles';
 import { useAudioEngine } from '@/hooks/useAudioEngine';
+import { useMetricsStore } from '@/hooks/useMetricsStore';
 import { buildSyntheticModels } from '@/ml/modelBuilder';
 import { setDemoMode } from '@/session/demoModeStore';
-import { SETUP_GUI } from '@/copy/phaseTitles';
 
 type InitStep = {
   label: string;
@@ -20,8 +21,10 @@ export default function SetupScreen() {
   const router = useRouter();
   const cameraPermission = useCameraPermission();
   const { webViewRef, isReady, diagnostics, onLoadEnd, onMessage } = useAudioEngine();
+  const { setSessionDemoMode } = useMetricsStore();
   const [modelsReady, setModelsReady] = useState(false);
   const [modelDetail, setModelDetail] = useState('Synthesizing encoder weights…');
+  const [demoModeEnabled, setDemoModeEnabled] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +73,12 @@ export default function SetupScreen() {
     },
   ];
 
+  const startSession = () => {
+    setDemoMode(demoModeEnabled);
+    setSessionDemoMode(demoModeEnabled);
+    router.push('/phase1');
+  };
+
   return (
     <ScreenShell
       title="Kommuni"
@@ -111,32 +120,41 @@ export default function SetupScreen() {
         </Pressable>
       ) : null}
 
+      <Pressable
+        onPress={() => setDemoModeEnabled((current) => !current)}
+        style={styles.checkboxRow}
+        disabled={!canEnterPhase1}
+      >
+        <View style={[styles.checkbox, demoModeEnabled && styles.checkboxChecked]}>
+          {demoModeEnabled ? <Text style={styles.checkboxMark}>✓</Text> : null}
+        </View>
+        <View style={styles.checkboxCopy}>
+          <Text style={styles.checkboxLabel}>{SETUP_GUI.demoModeLabel}</Text>
+          <Text style={styles.checkboxHint}>
+            {demoModeEnabled ? SETUP_GUI.demoModeHint : SETUP_GUI.researchModeHint}
+          </Text>
+        </View>
+      </Pressable>
+
       <View style={styles.nav}>
         {canEnterPhase1 ? (
           <Pressable
-            onPress={() => {
-              setDemoMode(true);
-              router.push('/phase1');
-            }}
-            style={({ pressed }) => [styles.demoButton, pressed && styles.pressed]}
+            onPress={startSession}
+            style={({ pressed }) => [
+              demoModeEnabled ? styles.demoButton : styles.startButton,
+              pressed && styles.pressed,
+            ]}
           >
-            <Text style={styles.demoButtonText}>DEMO</Text>
-            <Text style={styles.demoButtonHint}>{SETUP_GUI.demoHint}</Text>
+            <Text style={demoModeEnabled ? styles.demoButtonText : styles.startButtonText}>
+              {demoModeEnabled ? SETUP_GUI.startDemo : SETUP_GUI.startResearch}
+            </Text>
+            {demoModeEnabled ? (
+              <Text style={styles.demoButtonHint}>{SETUP_GUI.demoHint}</Text>
+            ) : null}
           </Pressable>
         ) : (
           <Text style={styles.linkDisabled}>Waiting for models + audio…</Text>
         )}
-        {canEnterPhase1 ? (
-          <Pressable
-            onPress={() => {
-              setDemoMode(false);
-              router.push('/phase1');
-            }}
-            style={({ pressed }) => [styles.primaryLinkWrap, pressed && styles.pressed]}
-          >
-            <Text style={styles.link}>{SETUP_GUI.continueToPhase1}</Text>
-          </Pressable>
-        ) : null}
         <Link href="/datalog" style={styles.linkSecondary}>
           Data & Log
         </Link>
@@ -205,6 +223,45 @@ const styles = StyleSheet.create({
     color: '#0B0B12',
     fontWeight: '700',
   },
+  checkboxRow: {
+    marginTop: 20,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#7EB6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#151522',
+    marginTop: 2,
+  },
+  checkboxChecked: {
+    backgroundColor: '#7EB6FF',
+  },
+  checkboxMark: {
+    color: '#0B0B12',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  checkboxCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  checkboxLabel: {
+    color: '#F5F5FA',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  checkboxHint: {
+    color: '#8888A0',
+    fontSize: 13,
+    lineHeight: 18,
+  },
   pressed: {
     opacity: 0.75,
   },
@@ -223,7 +280,7 @@ const styles = StyleSheet.create({
     color: '#0B0B12',
     fontSize: 22,
     fontWeight: '800',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   demoButtonHint: {
     color: '#0B0B12',
@@ -231,13 +288,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     opacity: 0.75,
   },
-  primaryLinkWrap: {
-    alignSelf: 'flex-start',
+  startButton: {
+    borderRadius: 12,
+    backgroundColor: '#1E1E2E',
+    borderWidth: 1,
+    borderColor: '#3A3A4E',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
-  link: {
+  startButtonText: {
     color: '#7EB6FF',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
   },
   linkDisabled: {
     color: '#55556A',

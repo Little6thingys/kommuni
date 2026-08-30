@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,6 +13,7 @@ import {
 import { MetricsDebugOverlay } from '@/components/MetricsDebugOverlay';
 import { ScreenShell } from '@/components/ScreenShell';
 import { useMetricsStore } from '@/hooks/useMetricsStore';
+import { buildDemoSessionHighlights } from '@/metrics/demoSessionSummary';
 import { MetricEntry } from '@/types';
 
 function formatPayload(entry: MetricEntry): string {
@@ -39,6 +40,10 @@ function kindLabel(kind: MetricEntry['kind']): string {
 export default function DataLogScreen() {
   const { entries, summary, clear, shareCsvExport, shareEncryptedJsonExport } = useMetricsStore();
   const [exporting, setExporting] = useState<'csv' | 'json' | null>(null);
+  const demoHighlights = useMemo(
+    () => (summary.demoMode ? buildDemoSessionHighlights(entries) : null),
+    [entries, summary.demoMode],
+  );
 
   const handleShareCsv = async () => {
     setExporting('csv');
@@ -77,14 +82,76 @@ export default function DataLogScreen() {
   return (
     <ScreenShell
       title="Data & Log"
-      subtitle="Session metrics with encrypted JSON and plain CSV export"
+      subtitle={
+        summary.demoMode
+          ? 'Demo session — caregiver showcase metrics plus full event log'
+          : 'Session metrics with encrypted JSON and plain CSV export'
+      }
     >
       <MetricsDebugOverlay />
+
+      {summary.demoMode && demoHighlights ? (
+        <View style={styles.demoCard}>
+          <View style={styles.demoBadgeRow}>
+            <Text style={styles.demoBadge}>Demo Mode</Text>
+            <Text style={styles.demoBadgeHint}>Parent-facing showcase session</Text>
+          </View>
+          <Text style={styles.cardTitle}>Showcase summary</Text>
+          <Text style={styles.demoIntro}>
+            Highlights from the calm-down → turn-taking flow. The full metrics table below is
+            unchanged.
+          </Text>
+          <View style={styles.demoGrid}>
+            <View style={styles.demoStat}>
+              <Text style={styles.demoStatValue}>{demoHighlights.phase1TouchInferences}</Text>
+              <Text style={styles.demoStatLabel}>Phase 1 touch notes</Text>
+            </View>
+            <View style={styles.demoStat}>
+              <Text style={styles.demoStatValue}>
+                {demoHighlights.avgPhase1Stress != null
+                  ? `${Math.round(demoHighlights.avgPhase1Stress * 100)}%`
+                  : '—'}
+              </Text>
+              <Text style={styles.demoStatLabel}>Avg touch stress</Text>
+            </View>
+            <View style={styles.demoStat}>
+              <Text style={styles.demoStatValue}>{demoHighlights.phase2ChildResponses}</Text>
+              <Text style={styles.demoStatLabel}>Child responses</Text>
+            </View>
+            <View style={styles.demoStat}>
+              <Text style={styles.demoStatValue}>{demoHighlights.jointAttentionMoments}</Text>
+              <Text style={styles.demoStatLabel}>Joint attention</Text>
+            </View>
+            <View style={styles.demoStat}>
+              <Text style={styles.demoStatValue}>{demoHighlights.rewardMoments}</Text>
+              <Text style={styles.demoStatLabel}>Turn rewards</Text>
+            </View>
+            <View style={styles.demoStat}>
+              <Text style={styles.demoStatValue}>{demoHighlights.musicHoverBeats}</Text>
+              <Text style={styles.demoStatLabel}>Music hover 😊</Text>
+            </View>
+          </View>
+          {demoHighlights.avgPhase2InferenceMs != null ? (
+            <Text style={styles.summaryRow}>
+              Avg Phase 2 inference: {demoHighlights.avgPhase2InferenceMs.toFixed(1)} ms
+            </Text>
+          ) : null}
+          {entries.length === 0 ? (
+            <Text style={styles.demoEmpty}>
+              No demo events yet. Start a Demo Mode session from Setup, play Phase 1, then finish
+              Phase 2.
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
 
       <View style={styles.summaryCard}>
         <Text style={styles.cardTitle}>Session</Text>
         <Text style={styles.summaryRow}>ID: {summary.sessionId}</Text>
         <Text style={styles.summaryRow}>Started: {summary.startedAt}</Text>
+        <Text style={styles.summaryRow}>
+          Mode: {summary.demoMode ? 'Demo showcase' : 'Research'}
+        </Text>
         <Text style={styles.summaryRow}>Entries: {summary.entryCount}</Text>
         {summary.avgAudioLatencyMs != null ? (
           <Text style={styles.summaryRow}>
@@ -104,7 +171,9 @@ export default function DataLogScreen() {
         <Text style={styles.cardTitle}>Metrics ({entries.length})</Text>
         {entries.length === 0 ? (
           <Text style={styles.empty}>
-            No session metrics recorded yet. Play notes on Phase 1 or run Benchmark Mode.
+            {summary.demoMode
+              ? 'No session metrics recorded yet. Complete the demo flow (Phase 1 → Phase 2).'
+              : 'No session metrics recorded yet. Play notes on Phase 1 or run Benchmark Mode.'}
           </Text>
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -174,6 +243,71 @@ export default function DataLogScreen() {
 }
 
 const styles = StyleSheet.create({
+  demoCard: {
+    marginTop: 16,
+    backgroundColor: '#182018',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2F4A35',
+    padding: 16,
+    gap: 10,
+  },
+  demoBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  demoBadge: {
+    color: '#0B0B12',
+    backgroundColor: '#9BFFC0',
+    fontSize: 12,
+    fontWeight: '800',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  demoBadgeHint: {
+    color: '#A8DDB8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  demoIntro: {
+    color: '#A8DDB8',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  demoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  demoStat: {
+    width: '30%',
+    minWidth: 96,
+    flexGrow: 1,
+    backgroundColor: '#101810',
+    borderRadius: 10,
+    padding: 10,
+    gap: 4,
+  },
+  demoStatValue: {
+    color: '#E8FFF0',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  demoStatLabel: {
+    color: '#7CB892',
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '600',
+  },
+  demoEmpty: {
+    color: '#7CB892',
+    fontSize: 13,
+    lineHeight: 18,
+  },
   summaryCard: {
     marginTop: 16,
     backgroundColor: '#151522',

@@ -9,17 +9,25 @@ export const PHASE1_GUI = {
   hint: `Keep slow, gentle strokes for ${PATIENCE_DURATION_MS / 1000} seconds to play together next.`,
 } as const;
 
-/** Phase 2 — child and companion play rhythms and share gaze. */
+/** Phase 2 — turn-taking taps with visual guidance toward shared joint attention. */
 export const PHASE2_GUI = {
   eyebrow: 'Phase 2',
   title: 'Play Music Together',
+  backLabel: '← Back',
   description:
-    'Take turns tapping the drums and look at each other—the music grows when you stay in sync.',
+    'Turn-taking taps with visual guidance toward shared joint attention. After the parent calls, wait five quiet seconds — then the child button blinks.',
   statusDetail:
-    'One person taps each drum pad. Stay face-to-face; shared rhythm and eye contact shape the song.',
+    'Parent call → wait → child blink → child answer. Three successful rounds unlock a shared music-hover moment.',
 } as const;
 
 export const SETUP_GUI = {
   demoHint: 'Calm down first — then play music together',
   continueToPhase1: 'Start: calm-down activity →',
+  demoModeLabel: 'Demo Mode',
+  demoModeHint:
+    'Showcase flow for caregivers: Phase 1 calm-down, then dyadic turn-taking with visual cues.',
+  researchModeHint:
+    'Research session: same phases with standard metrics logging and no demo highlights.',
+  startDemo: 'Start demo session',
+  startResearch: 'Start session',
 } as const;

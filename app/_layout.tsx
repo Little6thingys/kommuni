@@ -23,7 +23,7 @@ export default function RootLayout() {
             contentStyle: { flex: 1, backgroundColor: '#0B0B12' },
           }}
         />
-        <Stack.Screen name="phase2" options={{ title: 'Play Together' }} />
+        <Stack.Screen name="phase2" options={{ title: 'Play Together', headerShown: false }} />
         <Stack.Screen name="datalog" options={{ title: 'Data & Log' }} />
         <Stack.Screen name="benchmark" options={{ title: 'Benchmark Mode' }} />
       </Stack>

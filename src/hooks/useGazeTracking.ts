@@ -4,6 +4,7 @@ import { Linking } from 'react-native';
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 
 import { GazeSnapshot } from '@/types';
+import { JOINT_ATTENTION_ENABLED } from '@/fsm/constants';
 import {
   isResolvedNativeAssetPath,
   resolveFaceLandmarkerModelPath,
@@ -258,8 +259,16 @@ export function useGazeTracking(): UseGazeTrackingResult {
     }
   }, [permissionGranted]);
 
+  const snapshot = useMemo<GazeSnapshot>(() => {
+    const raw = nativeSnapshot ?? MOCK_GAZE;
+    return {
+      ...raw,
+      isJointAttention: JOINT_ATTENTION_ENABLED && raw.isJointAttention,
+    };
+  }, [nativeSnapshot]);
+
   return {
-    snapshot: nativeSnapshot ?? MOCK_GAZE,
+    snapshot,
     isMocked: nativeSnapshot === null,
     status,
     statusLabel,

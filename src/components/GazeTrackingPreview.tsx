@@ -55,26 +55,43 @@ function getCameraPreviewRotationDeg(): number {
   return typeof value === 'number' ? value : 0;
 }
 
-function buildPreviewTransform(
-  rotationDeg: number,
-  layout: { width: number; height: number },
-) {
+function buildPreviewTransform(rotationDeg: number) {
   if (rotationDeg === 0) {
     return undefined;
   }
 
-  const normalized = ((rotationDeg % 360) + 360) % 360;
-  const isSideways = normalized === 90 || normalized === 270;
-  const scale =
-    isSideways && layout.width > 0 && layout.height > 0
-      ? Math.max(layout.width / layout.height, layout.height / layout.width)
-      : 1;
-
   return {
-    transform: [
-      { rotate: `${rotationDeg}deg` },
-      ...(scale !== 1 ? [{ scale }] : []),
-    ],
+    transform: [{ rotate: `${rotationDeg}deg` }],
+  };
+}
+
+/** Sizes the camera view so a 90°/270° rotation fills the preview box edge-to-edge. */
+function buildCameraPreviewStyle(
+  rotationDeg: number,
+  layout: { width: number; height: number },
+) {
+  if (layout.width <= 0 || layout.height <= 0) {
+    return StyleSheet.absoluteFill;
+  }
+
+  const normalized = ((rotationDeg % 360) + 360) % 360;
+  if (normalized === 0) {
+    return StyleSheet.absoluteFill;
+  }
+
+  const isSideways = normalized === 90 || normalized === 270;
+  if (!isSideways) {
+    return [StyleSheet.absoluteFill, buildPreviewTransform(rotationDeg)];
+  }
+
+  const bleed = 1.05;
+  return {
+    position: 'absolute' as const,
+    width: layout.height,
+    height: layout.width,
+    left: (layout.width - layout.height) / 2,
+    top: (layout.height - layout.width) / 2,
+    transform: [{ rotate: `${rotationDeg}deg` }, { scale: bleed }],
   };
 }
 
@@ -191,6 +208,7 @@ function VisionCameraPreview({
   const configRotation = getCameraPreviewRotationDeg();
   // Manual config overrides auto uiRotation to avoid stacking two corrections.
   const rotationDeg = configRotation !== 0 ? configRotation : uiRotation;
+  const cameraStyle = buildCameraPreviewStyle(rotationDeg, layout);
 
   return (
     <View
@@ -202,7 +220,7 @@ function VisionCameraPreview({
       }}
     >
       <Camera
-        style={[StyleSheet.absoluteFill, buildPreviewTransform(rotationDeg, layout)]}
+        style={cameraStyle}
         device={device}
         isActive
         photo={false}

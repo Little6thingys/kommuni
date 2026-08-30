@@ -9,12 +9,20 @@ export type AudioParams = {
   cutPrevious?: boolean;
   /** 0 = aroused venting, 1 = resolved calm (MelodyBridge). */
   calmness?: number;
+  /** Stereo pan -1 (left) to 1 (right). */
+  pan?: number;
+  /** Optional pan glide target over the note release. */
+  panEnd?: number;
 };
+
+export type DroneTimbre = 'default' | 'musicbox' | 'gentle';
 
 export type DroneParams = {
   rootMidi: number;
   level: number;
   filterFreq: number;
+  /** Phase 2: `gentle` = single soft sine; `musicbox` = legacy bright hum. */
+  timbre?: DroneTimbre;
 };
 
 export type AudioScale = 'pentatonic' | 'chromatic';
@@ -56,6 +64,14 @@ export type AudioEngineStopMessage = {
   type: 'STOP';
 };
 
+export type AudioEnginePauseMessage = {
+  type: 'PAUSE';
+};
+
+export type AudioEngineResumeMessage = {
+  type: 'RESUME';
+};
+
 export type AudioEngineDroneMessage = {
   type: 'SET_DRONE';
   payload: DroneParams;
@@ -65,6 +81,8 @@ export type AudioEngineMessage =
   | AudioEnginePlayMessage
   | AudioEngineScaleMessage
   | AudioEngineStopMessage
+  | AudioEnginePauseMessage
+  | AudioEngineResumeMessage
   | AudioEngineDroneMessage;
 
 export type GazeSnapshot = {

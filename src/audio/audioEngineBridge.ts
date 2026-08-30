@@ -72,6 +72,14 @@ export function buildStopMessage(): AudioEngineMessage {
   };
 }
 
+export function buildPauseMessage(): AudioEngineMessage {
+  return { type: 'PAUSE' };
+}
+
+export function buildResumeMessage(): AudioEngineMessage {
+  return { type: 'RESUME' };
+}
+
 export function buildDroneMessage(payload: DroneParams): AudioEngineMessage {
   return {
     type: 'SET_DRONE',

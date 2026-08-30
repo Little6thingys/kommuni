@@ -1,0 +1,431 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Canvas,
+  Circle,
+  LinearGradient,
+  Path,
+  Rect,
+  Skia,
+  vec,
+} from '@shopify/react-native-skia';
+
+import { PHASE2_MUSIC_HOVER_SUCCESS_ROUNDS } from '@/ml/phase2TurnStreak';
+import { Phase2Participant, Phase2TapPulse } from '@/hooks/usePhase2Session';
+
+type FlowWave = {
+  id: number;
+  participant: Phase2Participant;
+  offset: number;
+  speed: number;
+};
+
+type Phase2RippleStageProps = {
+  rippleBoost: number;
+  lastTapPulse: Phase2TapPulse | null;
+  isJointAttention: boolean;
+  isChildTurn?: boolean;
+  rewardTick?: number;
+  musicHoverActive?: boolean;
+  successfulTurnRounds?: number;
+  onTap: (participant: Phase2Participant) => void;
+};
+
+const WAVE_LIFETIME = 1.15;
+const CHILD_TURN_BLINK_RATE = 12.5;
+const REWARD_FLASH_MS = 1400;
+
+function participantSide(participant: Phase2Participant): 'left' | 'right' {
+  return participant === 'partner' ? 'left' : 'right';
+}
+
+export function Phase2RippleStage({
+  rippleBoost,
+  lastTapPulse,
+  isJointAttention,
+  isChildTurn = false,
+  rewardTick = 0,
+  musicHoverActive = false,
+  successfulTurnRounds = 0,
+  onTap,
+}: Phase2RippleStageProps) {
+  const [size, setSize] = useState({ width: 1, height: 1 });
+  const [frame, setFrame] = useState(0);
+  const [showReward, setShowReward] = useState(false);
+  const wavesRef = useRef<FlowWave[]>([]);
+  const waveIdRef = useRef(0);
+  const lastPulseTickRef = useRef(0);
+  const boostRef = useRef(rippleBoost);
+
+  boostRef.current = rippleBoost;
+
+  const onLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setSize({ width, height });
+  }, []);
+
+  useEffect(() => {
+    if (!lastTapPulse || lastTapPulse.tick === lastPulseTickRef.current) {
+      return;
+    }
+    lastPulseTickRef.current = lastTapPulse.tick;
+    const batch = Array.from({ length: 5 }, (_, index) => ({
+      id: waveIdRef.current++,
+      participant: lastTapPulse.participant,
+      offset: index * 0.08,
+      speed: 0.72 + index * 0.06,
+    }));
+    wavesRef.current = [...wavesRef.current, ...batch].slice(-24);
+  }, [lastTapPulse]);
+
+  useEffect(() => {
+    if (!rewardTick) {
+      return;
+    }
+    setShowReward(true);
+    const timer = setTimeout(() => setShowReward(false), REWARD_FLASH_MS);
+    return () => clearTimeout(timer);
+  }, [rewardTick]);
+
+  useEffect(() => {
+    let rafId = 0;
+    const loop = () => {
+      setFrame((value) => value + 1);
+      wavesRef.current = wavesRef.current
+        .map((wave) => ({ ...wave, offset: wave.offset + 0.018 * wave.speed }))
+        .filter((wave) => wave.offset < WAVE_LIFETIME + 0.2);
+      rafId = requestAnimationFrame(loop);
+    };
+    rafId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
+
+  const centerX = size.width * 0.5;
+  const centerY = size.height * 0.5;
+  const drift = frame * 0.04;
+  const hoverExpansion = musicHoverActive ? 2.15 + 0.14 * Math.sin(drift * 2.4) : 1;
+  const poolRadius =
+    Math.min(size.width, size.height) * (0.14 + boostRef.current * 0.04) * hoverExpansion;
+  const poolPulse = 0.5 + 0.5 * Math.sin(drift * 1.4);
+  const jointGlow = isJointAttention ? 1 : 0.35 + boostRef.current * 0.4;
+  const childBlink = isChildTurn ? 0.5 + 0.5 * Math.sin(drift * CHILD_TURN_BLINK_RATE) : 0;
+  const childBlinkSharp = isChildTurn && Math.sin(drift * CHILD_TURN_BLINK_RATE) > 0;
+  const rewardPulse =
+    showReward || musicHoverActive ? 0.5 + 0.5 * Math.sin(drift * 6) : 0;
+
+  const flowPaths = wavesRef.current.map((wave) => {
+    const side = participantSide(wave.participant);
+    const progress = Math.min(1, wave.offset / WAVE_LIFETIME);
+    const eased = 1 - (1 - progress) ** 2.2;
+    const startX = side === 'left' ? size.width * 0.1 : size.width * 0.9;
+    const startY = size.height * (0.62 + Math.sin(wave.id) * 0.03);
+    const ctrlX = side === 'left' ? size.width * 0.34 : size.width * 0.66;
+    const ctrlY = size.height * 0.42;
+    const x = startX + (centerX - startX) * eased;
+    const y = startY + (centerY - startY) * eased;
+    const path = Skia.Path.Make();
+    path.moveTo(startX, startY);
+    path.quadTo(ctrlX, ctrlY, x, y);
+    const hue = wave.participant === 'partner' ? 205 : 155;
+    const alpha = Math.max(0, (1 - progress) * 0.55);
+    return { id: wave.id, path, hue, alpha, progress, x, y };
+  });
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.visualPane} onLayout={onLayout}>
+        <Canvas style={StyleSheet.absoluteFill}>
+        <Rect x={0} y={0} width={size.width} height={size.height}>
+          <LinearGradient
+            start={vec(0, 0)}
+            end={vec(size.width, size.height)}
+            colors={['#060A14', '#0E1830', '#12102A', '#080C18']}
+          />
+        </Rect>
+
+        {Array.from({ length: 2 }, (_, ring) => {
+          const ringPulse = 0.5 + 0.5 * Math.sin(drift * 0.9 + ring * 1.1);
+          const radius = poolRadius * (1.35 + ring * 0.42 + ringPulse * 0.08);
+          return (
+            <Circle
+              key={`pool-ring-${ring}`}
+              cx={centerX}
+              cy={centerY}
+              r={radius}
+              color={`hsla(${198 + ring * 8}, 72%, 58%, ${0.05 + jointGlow * 0.06})`}
+            />
+          );
+        })}
+
+        <Circle
+          cx={centerX}
+          cy={centerY}
+          r={poolRadius * (0.92 + poolPulse * 0.06)}
+          color={
+            musicHoverActive
+              ? `hsla(48, 96%, 72%, ${0.28 + rewardPulse * 0.22})`
+              : `hsla(195, 80%, 62%, ${0.14 + boostRef.current * 0.22})`
+          }
+        />
+        <Circle
+          cx={centerX}
+          cy={centerY}
+          r={poolRadius * (0.42 + (musicHoverActive ? rewardPulse * 0.12 : 0))}
+          color={
+            musicHoverActive
+              ? `hsla(42, 100%, 78%, ${0.34 + rewardPulse * 0.3})`
+              : `hsla(168, 88%, 72%, ${0.18 + jointGlow * 0.2})`
+          }
+        />
+
+        {musicHoverActive
+          ? Array.from({ length: 3 }, (_, ring) => {
+              const swell = 0.5 + 0.5 * Math.sin(drift * 3.6 + ring * 0.85);
+              return (
+                <Circle
+                  key={`hover-ring-${ring}-${Math.floor(frame / 5)}`}
+                  cx={centerX}
+                  cy={centerY}
+                  r={poolRadius * (0.75 + ring * 0.28 + swell * 0.18)}
+                  color={`hsla(46, 100%, 68%, ${(0.16 - ring * 0.03) * swell})`}
+                />
+              );
+            })
+          : null}
+
+        {flowPaths.map((flow) => (
+          <Path
+            key={`flow-${flow.id}-${Math.floor(flow.progress * 100)}`}
+            path={flow.path}
+            style="stroke"
+            strokeWidth={10 + flow.progress * 6}
+            color={`hsla(${flow.hue}, 88%, 68%, ${flow.alpha})`}
+          />
+        ))}
+
+        {flowPaths.map((flow) => (
+          <Circle
+            key={`spark-${flow.id}-${Math.floor(flow.progress * 100)}`}
+            cx={flow.x}
+            cy={flow.y}
+            r={5 + flow.progress * 8}
+            color={`hsla(${flow.hue}, 92%, 78%, ${flow.alpha * 0.9})`}
+          />
+        ))}
+
+        {showReward
+          ? (
+            <>
+              {Array.from({ length: 5 }, (_, ring) => {
+                const burst = 0.5 + 0.5 * Math.sin(drift * 5.2 + ring * 0.75);
+                const alpha = (0.5 - ring * 0.07) * burst;
+                return (
+                  <Circle
+                    key={`reward-ring-${ring}-${Math.floor(frame / 4)}`}
+                    cx={centerX}
+                    cy={centerY}
+                    r={poolRadius * (1 + ring * 0.48 + burst * 0.32 + rewardPulse * 0.18)}
+                    color={`hsla(36, 100%, 58%, ${alpha})`}
+                  />
+                );
+              })}
+              <Circle
+                cx={centerX}
+                cy={centerY}
+                r={poolRadius * (0.62 + rewardPulse * 0.18)}
+                color={`hsla(44, 100%, 70%, ${0.42 + rewardPulse * 0.38})`}
+              />
+            </>
+          )
+          : null}
+
+        {isJointAttention ? (
+          <Circle
+            cx={centerX}
+            cy={centerY}
+            r={poolRadius * 1.55}
+            color="rgba(126, 231, 135, 0.14)"
+          />
+        ) : null}
+        </Canvas>
+
+        {(musicHoverActive || showReward) ? (
+          <View style={styles.centerLabel} pointerEvents="none">
+            {musicHoverActive ? (
+              <Text style={styles.hoverEmoji}>😊</Text>
+            ) : (
+              <Text style={styles.rewardEmoji}>👍</Text>
+            )}
+          </View>
+        ) : null}
+      </View>
+
+      {musicHoverActive ? (
+        <View style={styles.hoverDockBanner} pointerEvents="none">
+          <Text style={styles.hoverDockEmoji}>😊</Text>
+        </View>
+      ) : null}
+
+      {successfulTurnRounds > 0 && !musicHoverActive ? (
+        <Text style={styles.streakHint} pointerEvents="none">
+          默契 {successfulTurnRounds}/{PHASE2_MUSIC_HOVER_SUCCESS_ROUNDS}
+        </Text>
+      ) : null}
+
+      <View style={styles.tapRow}>
+        <Pressable
+          onPress={() => onTap('partner')}
+          style={({ pressed }) => [
+            styles.tapZone,
+            styles.tapZonePartner,
+            isChildTurn && styles.tapZoneDimmed,
+            pressed && styles.tapZonePressed,
+          ]}
+        >
+          <Text style={styles.tapIcon}>◎</Text>
+          <Text style={styles.tapTitle}>家长</Text>
+         
+        </Pressable>
+
+        <Pressable
+          onPress={() => onTap('self')}
+          style={({ pressed }) => [
+            styles.tapZone,
+            styles.tapZoneSelf,
+            isChildTurn && {
+              borderColor: childBlinkSharp ? '#9BFFC0' : '#3A9E78',
+              borderWidth: childBlinkSharp ? 3 : 2,
+              backgroundColor: childBlinkSharp
+                ? 'rgba(28, 72, 54, 0.98)'
+                : 'rgba(12, 28, 22, 0.92)',
+              shadowColor: '#7EE787',
+              shadowOpacity: childBlink * 0.75,
+              shadowRadius: 4 + childBlink * 14,
+              shadowOffset: { width: 0, height: 0 },
+              elevation: 3 + Math.round(childBlink * 5),
+            },
+            showReward && styles.tapZoneSelfReward,
+            pressed && styles.tapZonePressed,
+          ]}
+        >
+          <Text style={[styles.tapIcon, isChildTurn && childBlinkSharp && styles.tapIconBlink]}>
+            ♪
+          </Text>
+          <Text style={[styles.tapTitle, isChildTurn && childBlinkSharp && styles.tapTitleBlink]}>
+            孩子
+          </Text>
+         
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: '#080C18',
+  },
+  visualPane: {
+    height: 108,
+    overflow: 'hidden',
+    backgroundColor: '#080C18',
+  },
+  centerLabel: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  rewardEmoji: {
+    fontSize: 40,
+    lineHeight: 46,
+  },
+  hoverEmoji: {
+    fontSize: 52,
+    lineHeight: 58,
+  },
+  hoverDockBanner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255, 248, 220, 0.92)',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255, 210, 120, 0.55)',
+  },
+  hoverDockEmoji: {
+    fontSize: 64,
+    lineHeight: 72,
+  },
+  streakHint: {
+    textAlign: 'center',
+    color: 'rgba(255, 220, 150, 0.88)',
+    fontSize: 11,
+    fontWeight: '700',
+    paddingTop: 4,
+  },
+  tapRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 10,
+  },
+  tapZone: {
+    flex: 1,
+    minHeight: 78,
+    borderRadius: 14,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(12, 16, 28, 0.92)',
+  },
+  tapZonePartner: {
+    borderColor: '#5A8FD4',
+  },
+  tapZoneSelf: {
+    borderColor: '#5AD4A8',
+  },
+  tapZoneSelfReward: {
+    borderColor: '#B8FFD4',
+    borderWidth: 3,
+    backgroundColor: 'rgba(36, 92, 68, 0.98)',
+    shadowColor: '#9BFFC0',
+    shadowOpacity: 0.65,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
+  },
+  tapZoneDimmed: {
+    opacity: 0.52,
+  },
+  tapZonePressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.98 }],
+  },
+  tapIcon: {
+    color: '#F5F5FA',
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  tapIconBlink: {
+    color: '#9BFFC0',
+  },
+  tapTitle: {
+    color: '#F5F5FA',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  tapTitleBlink: {
+    color: '#9BFFC0',
+  },
+  tapHint: {
+    color: '#A6A6BA',
+    fontSize: 10,
+    textAlign: 'center',
+    lineHeight: 14,
+  },
+});

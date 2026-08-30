@@ -25,6 +25,7 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
       (function () {
         const BRIDGE = window.ReactNativeWebView;
         const DEFAULT_RELEASE_MS = 520;
+        const MASTER_LEVEL = 0.14;
         const SCALE_MAP = {
           pentatonic: [0, 2, 4, 7, 9],
           chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
@@ -44,6 +45,7 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
         let droneGain = null;
         let droneFilter = null;
         let droneOscillators = [];
+        let droneActiveTimbre = 'default';
         let droneTarget = { rootMidi: 48, level: 0, filterFreq: 280 };
 
         function post(message) {
@@ -60,7 +62,7 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
             audioContext = new AudioCtor();
 
             masterGain = audioContext.createGain();
-            masterGain.gain.value = 0.14;
+            masterGain.gain.value = MASTER_LEVEL;
 
             filterNode = audioContext.createBiquadFilter();
             filterNode.type = 'lowpass';
@@ -157,6 +159,30 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
           activeVoices = [];
         }
 
+        function stopDrone() {
+          stopDroneOscillators();
+          if (droneGain) {
+            droneGain.gain.setTargetAtTime(0.0001, ensureContext().currentTime, 0.08);
+          }
+        }
+
+        function pauseEngine() {
+          const context = ensureContext();
+          const now = context.currentTime;
+          stopAllVoices();
+          stopDrone();
+          masterGain.gain.cancelScheduledValues(now);
+          masterGain.gain.setValueAtTime(Math.max(masterGain.gain.value, 0.0001), now);
+          masterGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+        }
+
+        function resumeEngine() {
+          const context = ensureContext();
+          const now = context.currentTime;
+          masterGain.gain.cancelScheduledValues(now);
+          masterGain.gain.setTargetAtTime(MASTER_LEVEL, now, 0.06);
+        }
+
         function stopDroneOscillators() {
           droneOscillators.forEach(function (oscillator) {
             try {
@@ -175,6 +201,15 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
           const rootMidi = quantizeNote(payload.rootMidi || 48);
           const level = Math.max(0, Math.min(Number(payload.level) || 0, 0.5));
           const filterFreq = Math.max(120, payload.filterFreq || 280);
+          const timbre =
+            payload.timbre === 'gentle'
+              ? 'gentle'
+              : payload.timbre === 'musicbox'
+                ? 'musicbox'
+                : 'default';
+          const waveType =
+            timbre === 'musicbox' ? 'triangle' : 'sine';
+          const gainFadeSeconds = timbre === 'gentle' ? 1.25 : 0.45;
 
           droneTarget = {
             rootMidi: rootMidi,
@@ -182,28 +217,41 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
             filterFreq: filterFreq,
           };
 
-          droneFilter.frequency.setTargetAtTime(filterFreq, now, 0.25);
+          droneFilter.type = 'lowpass';
+          droneFilter.Q.setTargetAtTime(
+            timbre === 'gentle' ? 0.1 : timbre === 'musicbox' ? 0.16 : 0.35,
+            now,
+            0.25
+          );
+          droneFilter.frequency.setTargetAtTime(filterFreq, now, timbre === 'gentle' ? 0.55 : 0.35);
           droneGain.gain.setTargetAtTime(
             level > 0.001 ? level : 0.0001,
             now,
-            0.35
+            gainFadeSeconds
           );
 
           if (level <= 0.001) {
             stopDroneOscillators();
+            droneActiveTimbre = 'default';
             return;
           }
 
-          const frequencies = [
-            midiToFrequency(rootMidi),
-            midiToFrequency(rootMidi + 7),
-          ];
+          const frequencies =
+            timbre === 'musicbox'
+              ? [midiToFrequency(quantizeNote(rootMidi + 12))]
+              : timbre === 'gentle'
+                ? [midiToFrequency(rootMidi)]
+                : [
+                    midiToFrequency(rootMidi),
+                    midiToFrequency(rootMidi + 7),
+                  ];
 
-          if (droneOscillators.length !== frequencies.length) {
+          if (droneOscillators.length !== frequencies.length || droneActiveTimbre !== timbre) {
             stopDroneOscillators();
+            droneActiveTimbre = timbre;
             frequencies.forEach(function (frequency) {
               const oscillator = context.createOscillator();
-              oscillator.type = 'sine';
+              oscillator.type = waveType;
               oscillator.frequency.setValueAtTime(frequency, now);
               oscillator.connect(droneFilter);
               oscillator.start(now);
@@ -213,13 +261,21 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
           }
 
           droneOscillators.forEach(function (oscillator, index) {
-            oscillator.frequency.setTargetAtTime(frequencies[index], now, 0.3);
+            oscillator.type = waveType;
+            oscillator.frequency.setTargetAtTime(frequencies[index], now, 0.35);
           });
+        }
+
+        function ensureAudible() {
+          if (masterGain.gain.value < 0.01) {
+            resumeEngine();
+          }
         }
 
         function playNote(payload) {
           const startedAt = performance.now();
           const context = ensureContext();
+          ensureAudible();
           const now = context.currentTime;
           const calmness = Math.max(0, Math.min(payload.calmness ?? 0.35, 1));
           const latentEnergy = Math.max(0, Math.min(payload.latentEnergy || 0, 1));
@@ -291,7 +347,22 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
               now + releaseMs / 1000
             );
 
-            voiceGain.connect(filterNode);
+            const panStart =
+              typeof payload.pan === 'number'
+                ? Math.max(-1, Math.min(1, payload.pan))
+                : 0;
+            const panEnd =
+              typeof payload.panEnd === 'number'
+                ? Math.max(-1, Math.min(1, payload.panEnd))
+                : panStart;
+            const panner = context.createStereoPanner();
+            panner.pan.setValueAtTime(panStart, now);
+            if (panEnd !== panStart) {
+              panner.pan.linearRampToValueAtTime(panEnd, now + releaseMs / 1000);
+            }
+
+            voiceGain.connect(panner);
+            panner.connect(filterNode);
 
             const voice = {
               gain: voiceGain,
@@ -350,12 +421,20 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
             return;
           }
 
+          if (payload.type === 'PAUSE') {
+            pauseEngine();
+            return;
+          }
+
+          if (payload.type === 'RESUME') {
+            resumeEngine();
+            return;
+          }
+
           if (payload.type === 'STOP') {
             stopAllVoices();
-            stopDroneOscillators();
-            if (droneGain) {
-              droneGain.gain.setTargetAtTime(0.0001, ensureContext().currentTime, 0.1);
-            }
+            stopDrone();
+            resumeEngine();
           }
         }
 

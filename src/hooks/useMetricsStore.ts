@@ -24,10 +24,15 @@ export function useMetricsStore() {
     [],
   );
 
+  const setSessionDemoMode = useCallback((enabled: boolean) => {
+    metricsStore.setSessionDemoMode(enabled);
+  }, []);
+
   return {
     entries,
     summary,
     clear,
+    setSessionDemoMode,
     shareCsvExport,
     shareEncryptedJsonExport,
   };
