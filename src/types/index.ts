@@ -87,6 +87,8 @@ export type AudioEngineMessage =
 
 export type GazeSnapshot = {
   gazeAngle: number;
+  /** Vertical iris offset in degrees (positive = looking down). */
+  gazePitch?: number;
   isJointAttention: boolean;
   headPose: {
     yaw: number;

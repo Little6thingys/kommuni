@@ -4,6 +4,10 @@ import {
   PHASE2_PARENT_CALL_RELEASE_MS,
   buildChildComplementaryAudio,
   buildChildTurnRewardAudio,
+  buildJointAttentionCueAudio,
+  buildJointAttentionSyncRewardAudio,
+  isConsonantWithAnchor,
+  resolveComplementaryChord,
   buildMusicHoverEchoSparkle,
   buildMusicHoverPeakArpeggio,
   buildMusicHoverPeakCelebration,
@@ -19,6 +23,10 @@ import {
 } from '@/ml/phase2Guidance';
 import { PHASE2_MUSIC_HOVER_SUCCESS_ROUNDS } from '@/ml/phase2TurnStreak';
 
+function scoreTriad(notes: number[]): number {
+  return notes.filter((note) => isConsonantWithAnchor(note, PHASE2_ANCHOR_MIDI)).length;
+}
+
 describe('phase2Guidance', () => {
   it('plays anchor A for caregiver call with pan toward center', () => {
     const audio = buildParentCallAudio();
@@ -27,26 +35,39 @@ describe('phase2Guidance', () => {
     expect(audio.panEnd).toBe(0);
   });
 
-  it('returns a stable consonant complementary chord for every child response', () => {
-    const quietFusion = buildChildComplementaryAudio({
-      notes: [64],
-      overtones: [1],
-      filterFreq: 600,
-      latentEnergy: 0.08,
+  it('maps HarmoniNet fusion into anchor-consonant complementary chords', () => {
+    const cFusion = buildChildComplementaryAudio({
+      notes: [60, 64, 67],
+      overtones: [1, 0.3, 0.15],
+      filterFreq: 1000,
+      latentEnergy: 0.45,
     });
-    const livelyFusion = buildChildComplementaryAudio({
-      notes: [72, 76],
-      overtones: [1, 0.5, 0.4],
-      filterFreq: 1800,
-      latentEnergy: 0.95,
+    const dmFusion = buildChildComplementaryAudio({
+      notes: [62, 65, 69],
+      overtones: [1, 0.5, 0.4, 0.2],
+      filterFreq: 1200,
+      latentEnergy: 0.62,
     });
 
-    expect(quietFusion.notes).toEqual([60, 64, 67]);
-    expect(livelyFusion.notes).toEqual([60, 64, 67]);
-    expect(quietFusion).toEqual(livelyFusion);
-    expect(quietFusion.pan).toBeGreaterThan(0);
-    expect(quietFusion.panEnd).toBe(0);
-    expect((quietFusion.releaseMs ?? 0)).toBeGreaterThan(1000);
+    expect(cFusion.notes).toHaveLength(3);
+    expect(dmFusion.notes).toHaveLength(3);
+    expect(scoreTriad(cFusion.notes)).toBeGreaterThanOrEqual(2);
+    expect(scoreTriad(dmFusion.notes)).toBeGreaterThanOrEqual(2);
+    expect(dmFusion.notes).not.toEqual(cFusion.notes);
+    expect(dmFusion.latentEnergy).toBeGreaterThan(cFusion.latentEnergy);
+    expect(dmFusion.filterFreq).toBe(1200);
+    expect(cFusion.pan).toBeGreaterThan(0);
+    expect(cFusion.panEnd).toBe(0);
+    expect((cFusion.releaseMs ?? 0)).toBeGreaterThan(1000);
+    expect(cFusion.cutPrevious).toBe(false);
+  });
+
+  it('falls back to a strong anchor complement when fusion notes are empty', () => {
+    const fallback = resolveComplementaryChord([], PHASE2_ANCHOR_MIDI);
+    expect(fallback).toHaveLength(3);
+    expect(fallback.filter((note) => isConsonantWithAnchor(note, PHASE2_ANCHOR_MIDI)).length).toBe(
+      3,
+    );
   });
 
   it('blinks the child button only after five seconds of parent idle', () => {
@@ -54,6 +75,15 @@ describe('phase2Guidance', () => {
     expect(PHASE2_PARENT_IDLE_BEFORE_CHILD_CUE_MS).toBeGreaterThan(
       PHASE2_PARENT_CALL_RELEASE_MS,
     );
+  });
+
+  it('plays joint-attention cue and sync reward audio presets', () => {
+    const cue = buildJointAttentionCueAudio();
+    const sync = buildJointAttentionSyncRewardAudio();
+    expect(cue.notes.length).toBeGreaterThanOrEqual(3);
+    expect(sync.notes.length).toBeGreaterThanOrEqual(4);
+    expect(cue.cutPrevious).toBe(false);
+    expect(sync.filterFreq).toBeGreaterThan(cue.filterFreq);
   });
 
   it('plays a short reward chord after a child response', () => {

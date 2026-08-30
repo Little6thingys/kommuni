@@ -10,6 +10,7 @@ import {
   vec,
 } from '@shopify/react-native-skia';
 
+import { PHASE2_GUI } from '@/copy/phaseTitles';
 import { PHASE2_MUSIC_HOVER_SUCCESS_ROUNDS } from '@/ml/phase2TurnStreak';
 import { Phase2Participant, Phase2TapPulse } from '@/hooks/usePhase2Session';
 
@@ -24,6 +25,7 @@ type Phase2RippleStageProps = {
   rippleBoost: number;
   lastTapPulse: Phase2TapPulse | null;
   isJointAttention: boolean;
+  jointAttentionPulseTick?: number;
   isChildTurn?: boolean;
   rewardTick?: number;
   musicHoverActive?: boolean;
@@ -34,6 +36,7 @@ type Phase2RippleStageProps = {
 const WAVE_LIFETIME = 1.15;
 const CHILD_TURN_BLINK_RATE = 12.5;
 const REWARD_FLASH_MS = 1400;
+const JOINT_PULSE_MS = 900;
 
 function participantSide(participant: Phase2Participant): 'left' | 'right' {
   return participant === 'partner' ? 'left' : 'right';
@@ -43,6 +46,7 @@ export function Phase2RippleStage({
   rippleBoost,
   lastTapPulse,
   isJointAttention,
+  jointAttentionPulseTick = 0,
   isChildTurn = false,
   rewardTick = 0,
   musicHoverActive = false,
@@ -52,6 +56,7 @@ export function Phase2RippleStage({
   const [size, setSize] = useState({ width: 1, height: 1 });
   const [frame, setFrame] = useState(0);
   const [showReward, setShowReward] = useState(false);
+  const [showJointPulse, setShowJointPulse] = useState(false);
   const wavesRef = useRef<FlowWave[]>([]);
   const waveIdRef = useRef(0);
   const lastPulseTickRef = useRef(0);
@@ -77,6 +82,15 @@ export function Phase2RippleStage({
     }));
     wavesRef.current = [...wavesRef.current, ...batch].slice(-24);
   }, [lastTapPulse]);
+
+  useEffect(() => {
+    if (!jointAttentionPulseTick) {
+      return;
+    }
+    setShowJointPulse(true);
+    const timer = setTimeout(() => setShowJointPulse(false), JOINT_PULSE_MS);
+    return () => clearTimeout(timer);
+  }, [jointAttentionPulseTick]);
 
   useEffect(() => {
     if (!rewardTick) {
@@ -111,7 +125,10 @@ export function Phase2RippleStage({
   const childBlink = isChildTurn ? 0.5 + 0.5 * Math.sin(drift * CHILD_TURN_BLINK_RATE) : 0;
   const childBlinkSharp = isChildTurn && Math.sin(drift * CHILD_TURN_BLINK_RATE) > 0;
   const rewardPulse =
-    showReward || musicHoverActive ? 0.5 + 0.5 * Math.sin(drift * 6) : 0;
+    showReward || musicHoverActive || showJointPulse
+      ? 0.5 + 0.5 * Math.sin(drift * 6)
+      : 0;
+  const jointPulse = showJointPulse ? 0.5 + 0.5 * Math.sin(drift * 8) : 0;
 
   const flowPaths = wavesRef.current.map((wave) => {
     const side = participantSide(wave.participant);
@@ -243,11 +260,23 @@ export function Phase2RippleStage({
           <Circle
             cx={centerX}
             cy={centerY}
-            r={poolRadius * 1.55}
-            color="rgba(126, 231, 135, 0.14)"
+            r={poolRadius * (1.55 + jointPulse * 0.12)}
+            color={`rgba(126, 231, 135, ${0.14 + jointPulse * 0.18})`}
           />
         ) : null}
         </Canvas>
+
+        {isJointAttention ? (
+          <View style={styles.jointAttentionBadge} pointerEvents="none">
+            <Text style={styles.jointAttentionText}>{PHASE2_GUI.jointAttentionActive}</Text>
+          </View>
+        ) : null}
+
+        {showJointPulse ? (
+          <View style={styles.centerLabel} pointerEvents="none">
+            <Text style={styles.jointPulseEmoji}>{PHASE2_GUI.jointAttentionRewardEmoji}</Text>
+          </View>
+        ) : null}
 
         {(musicHoverActive || showReward) ? (
           <View style={styles.centerLabel} pointerEvents="none">
@@ -282,8 +311,8 @@ export function Phase2RippleStage({
             pressed && styles.tapZonePressed,
           ]}
         >
-          <Text style={styles.tapIcon}>◎</Text>
-          <Text style={styles.tapTitle}>家长</Text>
+          <Text style={styles.tapIcon}>{PHASE2_GUI.tapDrumIcon}</Text>
+          <Text style={styles.tapTitle}>{PHASE2_GUI.parentTapLabel}</Text>
          
         </Pressable>
 
@@ -309,10 +338,10 @@ export function Phase2RippleStage({
           ]}
         >
           <Text style={[styles.tapIcon, isChildTurn && childBlinkSharp && styles.tapIconBlink]}>
-            ♪
+            {PHASE2_GUI.tapDrumIcon}
           </Text>
           <Text style={[styles.tapTitle, isChildTurn && childBlinkSharp && styles.tapTitleBlink]}>
-            孩子
+            {PHASE2_GUI.childTapLabel}
           </Text>
          
         </Pressable>
@@ -353,6 +382,25 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: 'rgba(255, 210, 120, 0.55)',
   },
+  jointAttentionBadge: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 5,
+    backgroundColor: 'rgba(16, 56, 36, 0.95)',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(126, 231, 135, 0.55)',
+  },
+  jointAttentionText: {
+    color: '#9BFFC0',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  jointPulseEmoji: {
+    fontSize: 44,
+    lineHeight: 50,
+  },
   hoverDockEmoji: {
     fontSize: 64,
     lineHeight: 72,
@@ -373,14 +421,14 @@ const styles = StyleSheet.create({
   },
   tapZone: {
     flex: 1,
-    minHeight: 78,
+    minHeight: 130,
     borderRadius: 14,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
+    gap: 6,
     paddingHorizontal: 6,
-    paddingVertical: 8,
+    paddingVertical: 16,
     backgroundColor: 'rgba(12, 16, 28, 0.92)',
   },
   tapZonePartner: {
@@ -407,9 +455,8 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   tapIcon: {
-    color: '#F5F5FA',
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 28,
+    lineHeight: 32,
   },
   tapIconBlink: {
     color: '#9BFFC0',

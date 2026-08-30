@@ -8,4 +8,4 @@ export const PATIENCE_DURATION_MS = 15000;
 export const PHASE_TRANSITION_MS = 1800;
 
 /** When false, joint-attention is never reported and Phase 2 ignores gaze-based rewards. */
-export const JOINT_ATTENTION_ENABLED = false;
+export const JOINT_ATTENTION_ENABLED = true;

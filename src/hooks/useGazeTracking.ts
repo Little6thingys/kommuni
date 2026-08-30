@@ -1,10 +1,15 @@
 import Constants from 'expo-constants';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Linking } from 'react-native';
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 
 import { GazeSnapshot } from '@/types';
 import { JOINT_ATTENTION_ENABLED } from '@/fsm/constants';
+import {
+  advanceJointAttentionSmoothState,
+  createJointAttentionSmoothState,
+  isJointAttentionFrame,
+} from '@/ml/jointAttention';
 import {
   isResolvedNativeAssetPath,
   resolveFaceLandmarkerModelPath,
@@ -12,6 +17,7 @@ import {
 
 const MOCK_GAZE: GazeSnapshot = {
   gazeAngle: 25,
+  gazePitch: 0,
   isJointAttention: false,
   headPose: { yaw: 0, pitch: 0, roll: 0 },
 };
@@ -62,6 +68,8 @@ export type UseGazeTrackingResult = {
 /** JS adapter for Module 2 that degrades cleanly until native MediaPipe wiring is prebuilt. */
 export function useGazeTracking(): UseGazeTrackingResult {
   const [nativeSnapshot, setNativeSnapshot] = useState<GazeSnapshot | null>(null);
+  const [smoothedJointAttention, setSmoothedJointAttention] = useState(false);
+  const jointSmoothRef = useRef(createJointAttentionSmoothState());
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [modelPath, setModelPath] = useState<string | null>(null);
   const [modelPathStatus, setModelPathStatus] = useState<ModelPathStatus>('idle');
@@ -256,16 +264,33 @@ export function useGazeTracking(): UseGazeTrackingResult {
   useEffect(() => {
     if (!permissionGranted) {
       setNativeSnapshot(null);
+      jointSmoothRef.current = createJointAttentionSmoothState();
+      setSmoothedJointAttention(false);
     }
   }, [permissionGranted]);
+
+  useEffect(() => {
+    if (!nativeSnapshot || !JOINT_ATTENTION_ENABLED) {
+      jointSmoothRef.current = createJointAttentionSmoothState();
+      setSmoothedJointAttention(false);
+      return;
+    }
+
+    const { state, latched } = advanceJointAttentionSmoothState(
+      jointSmoothRef.current,
+      isJointAttentionFrame(nativeSnapshot),
+    );
+    jointSmoothRef.current = state;
+    setSmoothedJointAttention(latched);
+  }, [nativeSnapshot]);
 
   const snapshot = useMemo<GazeSnapshot>(() => {
     const raw = nativeSnapshot ?? MOCK_GAZE;
     return {
       ...raw,
-      isJointAttention: JOINT_ATTENTION_ENABLED && raw.isJointAttention,
+      isJointAttention: JOINT_ATTENTION_ENABLED && nativeSnapshot !== null && smoothedJointAttention,
     };
-  }, [nativeSnapshot]);
+  }, [nativeSnapshot, smoothedJointAttention]);
 
   return {
     snapshot,

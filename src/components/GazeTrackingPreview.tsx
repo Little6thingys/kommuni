@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import { Camera, type CameraDevice, type CameraProps } from 'react-native-vision-camera';
 
+import { isJointAttentionFrame } from '@/ml/jointAttention';
 import { normalizeModelPathForMediaPipe } from '@/ml/resolveFaceLandmarkerModel';
 import type { GazeSnapshot } from '@/types';
 
@@ -183,12 +184,32 @@ function deriveSnapshot(
     ((rightIris.x - Math.min(rightOuter.x, rightInner.x)) / rightSpan - 0.5) * 2;
   const horizontalOffset = clamp((leftOffset + rightOffset) / 2, -1, 1);
   const gazeAngle = clamp(horizontalOffset * 30, -30, 30);
+
+  const leftUpper = getLandmark(landmarks, 159);
+  const leftLower = getLandmark(landmarks, 145);
+  const rightUpper = getLandmark(landmarks, 386);
+  const rightLower = getLandmark(landmarks, 374);
+  const leftVertSpan = Math.max(Math.abs(leftUpper.y - leftLower.y), 0.001);
+  const rightVertSpan = Math.max(Math.abs(rightUpper.y - rightLower.y), 0.001);
+  const leftVertOffset =
+    ((leftIris.y - (leftUpper.y + leftLower.y) / 2) / leftVertSpan) * 2;
+  const rightVertOffset =
+    ((rightIris.y - (rightUpper.y + rightLower.y) / 2) / rightVertSpan) * 2;
+  const verticalOffset = clamp((leftVertOffset + rightVertOffset) / 2, -1, 1);
+  const gazePitch = clamp(verticalOffset * 24, -24, 24);
+
   const headPose = getPoseFromMatrix(result?.facialTransformationMatrixes?.[0]?.data);
 
-  return {
+  const snapshot: GazeSnapshot = {
     gazeAngle,
-    isJointAttention: Math.abs(gazeAngle) < 8 && Math.abs(headPose.yaw) < 12,
+    gazePitch,
+    isJointAttention: false,
     headPose,
+  };
+
+  return {
+    ...snapshot,
+    isJointAttention: isJointAttentionFrame(snapshot),
   };
 }
 

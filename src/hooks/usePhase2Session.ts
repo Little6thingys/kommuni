@@ -8,6 +8,8 @@ import { buildGazeFeatureVector } from '@/ml/crossAttention';
 import {
   buildChildComplementaryAudio,
   buildChildTurnRewardAudio,
+  buildJointAttentionCueAudio,
+  buildJointAttentionSyncRewardAudio,
   buildMusicHoverEchoSparkle,
   buildMusicHoverPeakArpeggio,
   buildMusicHoverPeakCelebration,
@@ -16,6 +18,7 @@ import {
   buildPhase2SilentDrone,
   buildTurnNudgeAudio,
   PHASE2_CHILD_TURN_WINDOW_MS,
+  PHASE2_JOINT_ATTENTION_CUE_COOLDOWN_MS,
   PHASE2_MUSIC_HOVER_SILENCE_MS,
   PHASE2_MUSIC_HOVER_VISUAL_MS,
   PHASE2_MUSIC_HOVER_WINDUP_INTERVAL_MS,
@@ -53,6 +56,7 @@ export function usePhase2Session() {
   const [lastTapPulse, setLastTapPulse] = useState<Phase2TapPulse | null>(null);
   const [awaitingChildTurn, setAwaitingChildTurn] = useState(false);
   const [turnRewardTick, setTurnRewardTick] = useState(0);
+  const [jointAttentionPulseTick, setJointAttentionPulseTick] = useState(0);
   const [musicHoverActive, setMusicHoverActive] = useState(false);
   const [successfulTurnRounds, setSuccessfulTurnRounds] = useState(0);
   const sessionStartRef = useRef(Date.now());
@@ -65,6 +69,8 @@ export function usePhase2Session() {
   const musicHoverTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const lastParentTouchAtRef = useRef<number | null>(null);
   const musicHoverActiveRef = useRef(false);
+  const wasJointAttentionRef = useRef(false);
+  const lastJointCueAtRef = useRef(0);
 
   const clearTurnTimers = useCallback(() => {
     if (turnRevealTimeoutRef.current) {
@@ -325,13 +331,20 @@ export function usePhase2Session() {
       }
 
       const fusion = runPipeline(nextRhythmTap);
-      playAudibleNote(buildChildComplementaryAudio(fusion.audioParams));
+      const jointAttention = gaze.snapshot.isJointAttention;
+      playAudibleNote(
+        buildChildComplementaryAudio(fusion.audioParams, { jointAttention }),
+      );
 
       setTurnRewardTick(Date.now());
-      pulseRipple('self', 0.38);
+      pulseRipple('self', jointAttention ? 0.48 : 0.38);
       rewardAudioTimeoutRef.current = setTimeout(() => {
-        playAudibleNote(buildChildTurnRewardAudio());
-      }, 300);
+        playAudibleNote(
+          fusion.rewardTriggered
+            ? buildJointAttentionSyncRewardAudio()
+            : buildChildTurnRewardAudio(),
+        );
+      }, fusion.rewardTriggered ? 180 : 300);
     },
     [
       audio.isReady,
@@ -343,6 +356,7 @@ export function usePhase2Session() {
       scheduleChildTurnCue,
       selfTaps,
       triggerMusicHover,
+      gaze.snapshot.isJointAttention,
     ],
   );
 
@@ -358,6 +372,9 @@ export function usePhase2Session() {
     setLastTapPulse(null);
     setAwaitingChildTurn(false);
     setTurnRewardTick(0);
+    setJointAttentionPulseTick(0);
+    wasJointAttentionRef.current = false;
+    lastJointCueAtRef.current = 0;
     musicHoverActiveRef.current = false;
     setMusicHoverActive(false);
     setSuccessfulTurnRounds(0);
@@ -394,6 +411,32 @@ export function usePhase2Session() {
     return () => clearInterval(intervalId);
   }, []);
 
+  useEffect(() => {
+    const active = gaze.snapshot.isJointAttention && !musicHoverActiveRef.current;
+    if (!active) {
+      wasJointAttentionRef.current = false;
+      return;
+    }
+
+    if (wasJointAttentionRef.current) {
+      return;
+    }
+
+    wasJointAttentionRef.current = true;
+    const now = Date.now();
+    if (now - lastJointCueAtRef.current < PHASE2_JOINT_ATTENTION_CUE_COOLDOWN_MS) {
+      return;
+    }
+
+    lastJointCueAtRef.current = now;
+    setJointAttentionPulseTick(now);
+    setRippleBoost((current) => Math.min(1, current + 0.28));
+    if (audio.isReady) {
+      audio.resume();
+      audio.playNote(buildJointAttentionCueAudio());
+    }
+  }, [audio.isReady, audio.playNote, audio.resume, gaze.snapshot.isJointAttention]);
+
   return {
     gaze,
     audio,
@@ -406,6 +449,7 @@ export function usePhase2Session() {
     lastTapPulse,
     awaitingChildTurn,
     turnRewardTick,
+    jointAttentionPulseTick,
     musicHoverActive,
     successfulTurnRounds,
     handleTap,

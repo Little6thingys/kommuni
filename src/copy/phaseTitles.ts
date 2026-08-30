@@ -15,9 +15,16 @@ export const PHASE2_GUI = {
   title: 'Play Music Together',
   backLabel: '← Back',
   description:
-    'Turn-taking taps with visual guidance toward shared joint attention. After the parent calls, wait five quiet seconds — then the child button blinks.',
+    'Turn-taking taps with visual guidance toward shared joint attention.wait five quiet seconds — then the child button blinks.',
   statusDetail:
     'Parent call → wait → child blink → child answer. Three successful rounds unlock a shared music-hover moment.',
+  parentTapLabel: 'Parent',
+  childTapLabel: 'Child',
+  tapDrumIcon: '🥁',
+  jointAttentionActive: 'Joint Attention',
+  jointAttentionHint: 'Look at the screen together',
+  jointAttentionUnavailable: 'Enable face tracking for joint attention',
+  jointAttentionRewardEmoji: '✨',
 } as const;
 
 export const SETUP_GUI = {

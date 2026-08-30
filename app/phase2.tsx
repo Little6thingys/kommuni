@@ -5,6 +5,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { GazeTrackingPreview } from '@/components/GazeTrackingPreview';
 import { HiddenAudioEngineWebView } from '@/components/HiddenAudioEngineWebView';
+import { JointAttentionIndicator } from '@/components/JointAttentionIndicator';
 import { MetricsDebugOverlay } from '@/components/MetricsDebugOverlay';
 import { MusicHoverOverlay } from '@/components/MusicHoverOverlay';
 import { Phase2RippleStage } from '@/components/Phase2RippleStage';
@@ -26,6 +27,7 @@ export default function Phase2Screen() {
     lastTapPulse,
     awaitingChildTurn,
     turnRewardTick,
+    jointAttentionPulseTick,
     musicHoverActive,
     successfulTurnRounds,
     handleTap,
@@ -89,6 +91,13 @@ export default function Phase2Screen() {
           )}
         </View>
 
+        <View style={styles.jointAttentionOverlay} pointerEvents="none">
+          <JointAttentionIndicator
+            active={gaze.snapshot.isJointAttention}
+            nativeReady={gaze.enableNativeTracking}
+          />
+        </View>
+
         {rewardFlash && !musicHoverActive ? (
           <View style={styles.rewardFlash} pointerEvents="none">
             <Text style={styles.rewardFlashText}>👍</Text>
@@ -110,6 +119,7 @@ export default function Phase2Screen() {
               rippleBoost={rippleBoost}
               lastTapPulse={lastTapPulse}
               isJointAttention={gaze.snapshot.isJointAttention}
+              jointAttentionPulseTick={jointAttentionPulseTick}
               isChildTurn={awaitingChildTurn}
               rewardTick={turnRewardTick}
               musicHoverActive={musicHoverActive}
@@ -169,6 +179,14 @@ const styles = StyleSheet.create({
   },
   cameraFill: {
     ...StyleSheet.absoluteFill,
+  },
+  jointAttentionOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '18%',
+    zIndex: 5,
+    alignItems: 'center',
   },
   cameraPlaceholder: {
     flex: 1,

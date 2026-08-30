@@ -1,4 +1,3 @@
-import { applyMusicTheoryMask } from '@/ml/musicTheoryMask';
 import {
   PHASE2_MUSIC_HOVER_SUCCESS_ROUNDS,
   Phase2TurnParticipant,
@@ -25,8 +24,109 @@ export const PHASE2_MUSIC_HOVER_SILENCE_MS = 340;
 /** Central orb expansion duration during music hover. */
 export const PHASE2_MUSIC_HOVER_VISUAL_MS = 3000;
 
-/** C-major triad complementing the anchor A. */
-const COMPLEMENTARY_CHORD = applyMusicTheoryMask([60, 64, 67]);
+/** Minimum gap between joint-attention sparkle cues (avoids gaze flicker spam). */
+export const PHASE2_JOINT_ATTENTION_CUE_COOLDOWN_MS = 2_500;
+
+const C_MAJOR_PCS = [0, 2, 4, 5, 7, 9, 11];
+const DYADIC_CONSONANT_INTERVALS = new Set([0, 3, 4, 7, 9]);
+/** Pitch-class roots in C major that complement concert A (pc 9). */
+const ANCHOR_COMPLEMENT_ROOTS = [5, 2, 0, 4];
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function normalizePitchClass(note: number): number {
+  return ((note % 12) + 12) % 12;
+}
+
+function intervalToAnchor(notePc: number, anchorPc: number): number {
+  return Math.min(Math.abs(notePc - anchorPc), 12 - Math.abs(notePc - anchorPc));
+}
+
+/** Whether a note sits in a consonant interval above the parent anchor. */
+export function isConsonantWithAnchor(note: number, anchorMidi: number): boolean {
+  return DYADIC_CONSONANT_INTERVALS.has(
+    intervalToAnchor(normalizePitchClass(note), normalizePitchClass(anchorMidi)),
+  );
+}
+
+function snapToCMajorPitchClass(pc: number): number {
+  if (C_MAJOR_PCS.includes(pc)) {
+    return pc;
+  }
+
+  let best = C_MAJOR_PCS[0];
+  let bestDistance = 12;
+  for (const candidate of C_MAJOR_PCS) {
+    const distance = Math.min(Math.abs(pc - candidate), 12 - Math.abs(pc - candidate));
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+function buildTriadFromRoot(rootPc: number, baseMidi = 60): number[] {
+  const thirdInterval = C_MAJOR_PCS.includes((rootPc + 4) % 12) ? 4 : 3;
+  return [baseMidi + rootPc, baseMidi + rootPc + thirdInterval, baseMidi + rootPc + 7].map(
+    (note) => {
+      let midi = note;
+      while (midi < 57) {
+        midi += 12;
+      }
+      while (midi > 72) {
+        midi -= 12;
+      }
+      return midi;
+    },
+  );
+}
+
+function scoreTriadWithAnchor(triad: number[], anchorMidi: number): number {
+  return triad.filter((note) => isConsonantWithAnchor(note, anchorMidi)).length;
+}
+
+function bestComplementTriad(preferredRootPc: number, anchorMidi: number): number[] {
+  const preferredRoot = snapToCMajorPitchClass(preferredRootPc);
+  const preferredTriad = buildTriadFromRoot(preferredRoot);
+  const preferredScore = scoreTriadWithAnchor(preferredTriad, anchorMidi);
+
+  if (preferredScore >= 2) {
+    return preferredTriad;
+  }
+
+  let bestTriad = buildTriadFromRoot(ANCHOR_COMPLEMENT_ROOTS[0]);
+  let bestScore = -1;
+
+  for (const rootPc of ANCHOR_COMPLEMENT_ROOTS) {
+    const triad = buildTriadFromRoot(rootPc);
+    const score = scoreTriadWithAnchor(triad, anchorMidi);
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestTriad = triad;
+    }
+  }
+
+  return bestTriad;
+}
+
+/**
+ * Maps HarmoniNet / fusion notes into a register-safe triad that complements the parent call.
+ * Falls back to the strongest anchor-consonant triad when fusion output is empty.
+ */
+export function resolveComplementaryChord(fusionNotes: number[], anchorMidi: number): number[] {
+  if (fusionNotes.length === 0) {
+    return bestComplementTriad(ANCHOR_COMPLEMENT_ROOTS[0], anchorMidi);
+  }
+
+  const rootPc = snapToCMajorPitchClass(
+    normalizePitchClass([...fusionNotes].sort((a, b) => a - b)[0] ?? 60),
+  );
+  return bestComplementTriad(rootPc, anchorMidi);
+}
 
 /** Fade in whisper hum one round before music hover (not during whole session). */
 export const PHASE2_PRE_HOVER_DRONE_ROUND = PHASE2_MUSIC_HOVER_SUCCESS_ROUNDS - 1;
@@ -76,17 +176,65 @@ export function buildParentCallAudio(): AudioParams {
   };
 }
 
-/** Child tap: highly consonant complementary chord gliding to center. */
-export function buildChildComplementaryAudio(_fusion: AudioParams): AudioParams {
+/** Child tap: HarmoniNet fusion shaped into an anchor-consonant complementary chord. */
+export function buildChildComplementaryAudio(
+  fusion: AudioParams,
+  options?: { jointAttention?: boolean },
+): AudioParams {
+  const notes = resolveComplementaryChord(fusion.notes, PHASE2_ANCHOR_MIDI);
+  const jointAttention = options?.jointAttention === true;
+  let energy = clamp(fusion.latentEnergy ?? 0.5, 0.38, 0.68);
+  if (jointAttention) {
+    energy = clamp(energy + 0.08, 0.42, 0.72);
+  }
+  const overtones =
+    fusion.overtones.length >= 3
+      ? fusion.overtones.map((partial, index) =>
+          clamp(partial, index === 0 ? 1 : 0.08, index === 0 ? 1 : jointAttention ? 0.52 : 0.45),
+        )
+      : jointAttention
+        ? [1, 0.38, 0.2, 0.1]
+        : [1, 0.32, 0.16, 0.08];
+
   return {
-    notes: COMPLEMENTARY_CHORD,
-    overtones: [1, 0.32, 0.16, 0.08],
-    filterFreq: 1020,
-    latentEnergy: 0.5,
-    releaseMs: 1240,
+    notes,
+    overtones,
+    filterFreq: clamp(fusion.filterFreq ?? 1020, 880, jointAttention ? 1480 : 1360),
+    latentEnergy: energy,
+    releaseMs: jointAttention ? 1320 : 1240,
     cutPrevious: false,
-    calmness: 0.92,
+    calmness: clamp(0.9 - energy * 0.15, 0.78, 0.92),
     pan: 0.9,
+    panEnd: 0,
+  };
+}
+
+/** Soft ascending chime when joint attention is first detected. */
+export function buildJointAttentionCueAudio(): AudioParams {
+  return {
+    notes: [76, 79, 84],
+    overtones: [1, 0.48, 0.22, 0.1],
+    filterFreq: 1520,
+    latentEnergy: 0.44,
+    releaseMs: 520,
+    cutPrevious: false,
+    calmness: 0.88,
+    pan: 0,
+    panEnd: 0,
+  };
+}
+
+/** Extra sparkle when child taps during joint attention with steady shared rhythm. */
+export function buildJointAttentionSyncRewardAudio(): AudioParams {
+  return {
+    notes: [79, 84, 88, 91],
+    overtones: [1, 0.55, 0.28, 0.14],
+    filterFreq: 1680,
+    latentEnergy: 0.58,
+    releaseMs: 760,
+    cutPrevious: false,
+    calmness: 0.9,
+    pan: 0,
     panEnd: 0,
   };
 }
