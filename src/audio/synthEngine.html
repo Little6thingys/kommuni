@@ -59,7 +59,7 @@
             audioContext = new AudioCtor();
 
             masterGain = audioContext.createGain();
-            masterGain.gain.value = 0.14;
+            masterGain.gain.value = 1.0;
 
             filterNode = audioContext.createBiquadFilter();
             filterNode.type = 'lowpass';
@@ -73,15 +73,15 @@
             delayFeedback.gain.value = 0.28;
 
             delayMix = audioContext.createGain();
-            delayMix.gain.value = 0.34;
+            delayMix.gain.value = 0.5;
 
             dryGain = audioContext.createGain();
-            dryGain.gain.value = 0.78;
+            dryGain.gain.value = 1.0;
 
             compressor = audioContext.createDynamicsCompressor();
-            compressor.threshold.value = -24;
-            compressor.knee.value = 24;
-            compressor.ratio.value = 4;
+            compressor.threshold.value = -10;
+            compressor.knee.value = 12;
+            compressor.ratio.value = 2;
             compressor.attack.value = 0.008;
             compressor.release.value = 0.35;
 
@@ -277,8 +277,8 @@
             });
 
             const attack = 0.02 + (1 - calmness) * 0.02;
-            const sustain = 0.05 + latentEnergy * 0.08 + calmness * 0.06;
-            const peak = 0.08 + latentEnergy * 0.12 + calmness * 0.1;
+            const sustain = 0.14 + latentEnergy * 0.2 + calmness * 0.15;
+            const peak = 0.28 + latentEnergy * 0.32 + calmness * 0.24;
 
             voiceGain.gain.exponentialRampToValueAtTime(peak, now + attack);
             voiceGain.gain.exponentialRampToValueAtTime(

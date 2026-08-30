@@ -1,5 +1,5 @@
 import Constants from 'expo-constants';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import { Camera, type CameraDevice, type CameraProps } from 'react-native-vision-camera';
 
@@ -274,39 +274,53 @@ function NativeMediapipeCamera({
 }) {
   const { Delegate, RunningMode, useFaceLandmarkDetection } = bindings;
 
-  const onResults = useMemo(
-    () =>
-      (
-        bundle: {
-          results: Array<{
-            faceLandmarks: Array<Array<{ x: number; y: number; z: number }>>;
-            facialTransformationMatrixes: Array<{ data: number[] }>;
-          }>;
-        },
-      ) => {
-        const snapshot = deriveSnapshot(bundle.results?.[0] ?? null);
-        if (snapshot) {
-          onSnapshot(snapshot);
-        }
+  const onResults = useCallback(
+    (
+      bundle: {
+        results: Array<{
+          faceLandmarks: Array<Array<{ x: number; y: number; z: number }>>;
+          facialTransformationMatrixes: Array<{ data: number[] }>;
+        }>;
       },
+    ) => {
+      const snapshot = deriveSnapshot(bundle.results?.[0] ?? null);
+      if (snapshot) {
+        onSnapshot(snapshot);
+      }
+    },
     [onSnapshot],
   );
 
-  const solution = useFaceLandmarkDetection(
-    onResults,
-    (error) => {
+  const onDetectorError = useCallback(
+    (error: { message: string }) => {
       onRuntimeError(error.message || 'MediaPipe detector failed to start.');
     },
-    RunningMode.LIVE_STREAM,
-    normalizeModelPathForMediaPipe(modelPath),
-    {
+    [onRuntimeError],
+  );
+
+  const detectorOptions = useMemo(
+    () => ({
       delegate: Delegate.CPU,
-      mirrorMode: 'mirror-front-only',
+      mirrorMode: 'mirror-front-only' as const,
       numFaces: 1,
       minFaceDetectionConfidence: 0.6,
       minFacePresenceConfidence: 0.6,
       minTrackingConfidence: 0.5,
-    },
+    }),
+    [Delegate.CPU],
+  );
+
+  const normalizedModelPath = useMemo(
+    () => normalizeModelPathForMediaPipe(modelPath),
+    [modelPath],
+  );
+
+  const solution = useFaceLandmarkDetection(
+    onResults,
+    onDetectorError,
+    RunningMode.LIVE_STREAM,
+    normalizedModelPath,
+    detectorOptions,
   );
 
   useEffect(() => {
@@ -337,12 +351,14 @@ export function GazeTrackingPreview({
       return null;
     }
 
-    const loaded = loadMediaPipeBindings();
-    if (!loaded) {
+    return loadMediaPipeBindings();
+  }, [enableNativeTracking, modelPath]);
+
+  useEffect(() => {
+    if (enableNativeTracking && modelPath && !bindings) {
       onRuntimeError('react-native-mediapipe could not be loaded from this runtime.');
     }
-    return loaded;
-  }, [enableNativeTracking, modelPath, onRuntimeError]);
+  }, [bindings, enableNativeTracking, modelPath, onRuntimeError]);
 
   const containerStyle = edgeToEdge ? styles.fillEdgeToEdge : styles.fill;
 

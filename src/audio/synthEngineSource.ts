@@ -25,7 +25,15 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
       (function () {
         const BRIDGE = window.ReactNativeWebView;
         const DEFAULT_RELEASE_MS = 520;
-        const MASTER_LEVEL = 0.14;
+        const MASTER_LEVEL = 1.0;
+        const DRY_LEVEL = 1.0;
+        const VOICE_PEAK_BASE = 0.28;
+        const VOICE_PEAK_LATENT = 0.32;
+        const VOICE_PEAK_CALM = 0.24;
+        const VOICE_SUSTAIN_BASE = 0.14;
+        const VOICE_SUSTAIN_LATENT = 0.2;
+        const VOICE_SUSTAIN_CALM = 0.15;
+        const DRONE_LEVEL_MAX = 1.0;
         const SCALE_MAP = {
           pentatonic: [0, 2, 4, 7, 9],
           chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
@@ -76,15 +84,15 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
             delayFeedback.gain.value = 0.28;
 
             delayMix = audioContext.createGain();
-            delayMix.gain.value = 0.34;
+            delayMix.gain.value = 0.5;
 
             dryGain = audioContext.createGain();
-            dryGain.gain.value = 0.78;
+            dryGain.gain.value = DRY_LEVEL;
 
             compressor = audioContext.createDynamicsCompressor();
-            compressor.threshold.value = -24;
-            compressor.knee.value = 24;
-            compressor.ratio.value = 4;
+            compressor.threshold.value = -10;
+            compressor.knee.value = 12;
+            compressor.ratio.value = 2;
             compressor.attack.value = 0.008;
             compressor.release.value = 0.35;
 
@@ -199,7 +207,7 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
           const context = ensureContext();
           const now = context.currentTime;
           const rootMidi = quantizeNote(payload.rootMidi || 48);
-          const level = Math.max(0, Math.min(Number(payload.level) || 0, 0.5));
+          const level = Math.max(0, Math.min(Number(payload.level) || 0, DRONE_LEVEL_MAX));
           const filterFreq = Math.max(120, payload.filterFreq || 280);
           const timbre =
             payload.timbre === 'gentle'
@@ -334,8 +342,10 @@ export const SYNTH_ENGINE_SOURCE = String.raw`<!DOCTYPE html>
             });
 
             const attack = 0.02 + (1 - calmness) * 0.02;
-            const sustain = 0.05 + latentEnergy * 0.08 + calmness * 0.06;
-            const peak = 0.08 + latentEnergy * 0.12 + calmness * 0.1;
+            const sustain =
+              VOICE_SUSTAIN_BASE + latentEnergy * VOICE_SUSTAIN_LATENT + calmness * VOICE_SUSTAIN_CALM;
+            const peak =
+              VOICE_PEAK_BASE + latentEnergy * VOICE_PEAK_LATENT + calmness * VOICE_PEAK_CALM;
 
             voiceGain.gain.exponentialRampToValueAtTime(peak, now + attack);
             voiceGain.gain.exponentialRampToValueAtTime(

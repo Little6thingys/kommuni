@@ -406,7 +406,12 @@ export function usePhase2Session() {
 
   useEffect(() => {
     const intervalId = setInterval(() => {
-      setRippleBoost((current) => (current <= 0.01 ? 0 : current * 0.94));
+      setRippleBoost((current) => {
+        if (current <= 0.01) {
+          return current <= 0 ? current : 0;
+        }
+        return current * 0.94;
+      });
     }, 120);
     return () => clearInterval(intervalId);
   }, []);

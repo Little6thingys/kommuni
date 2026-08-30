@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   Canvas,
@@ -103,15 +103,29 @@ export function Phase2RippleStage({
 
   useEffect(() => {
     let rafId = 0;
+    let mounted = true;
+
     const loop = () => {
-      setFrame((value) => value + 1);
+      if (!mounted) {
+        return;
+      }
+
       wavesRef.current = wavesRef.current
         .map((wave) => ({ ...wave, offset: wave.offset + 0.018 * wave.speed }))
         .filter((wave) => wave.offset < WAVE_LIFETIME + 0.2);
+
+      startTransition(() => {
+        setFrame((value) => value + 1);
+      });
+
       rafId = requestAnimationFrame(loop);
     };
+
     rafId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(rafId);
+    return () => {
+      mounted = false;
+      cancelAnimationFrame(rafId);
+    };
   }, []);
 
   const centerX = size.width * 0.5;

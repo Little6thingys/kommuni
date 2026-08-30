@@ -70,6 +70,7 @@ export function useGazeTracking(): UseGazeTrackingResult {
   const [nativeSnapshot, setNativeSnapshot] = useState<GazeSnapshot | null>(null);
   const [smoothedJointAttention, setSmoothedJointAttention] = useState(false);
   const jointSmoothRef = useRef(createJointAttentionSmoothState());
+  const smoothedJointAttentionRef = useRef(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [modelPath, setModelPath] = useState<string | null>(null);
   const [modelPathStatus, setModelPathStatus] = useState<ModelPathStatus>('idle');
@@ -210,6 +211,25 @@ export function useGazeTracking(): UseGazeTrackingResult {
     setRuntimeError(message);
   }, []);
 
+  const ingestNativeSnapshot = useCallback((next: GazeSnapshot) => {
+    setNativeSnapshot(next);
+
+    if (!JOINT_ATTENTION_ENABLED) {
+      return;
+    }
+
+    const { state, latched } = advanceJointAttentionSmoothState(
+      jointSmoothRef.current,
+      isJointAttentionFrame(next),
+    );
+    jointSmoothRef.current = state;
+
+    if (latched !== smoothedJointAttentionRef.current) {
+      smoothedJointAttentionRef.current = latched;
+      setSmoothedJointAttention(latched);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -265,24 +285,10 @@ export function useGazeTracking(): UseGazeTrackingResult {
     if (!permissionGranted) {
       setNativeSnapshot(null);
       jointSmoothRef.current = createJointAttentionSmoothState();
+      smoothedJointAttentionRef.current = false;
       setSmoothedJointAttention(false);
     }
   }, [permissionGranted]);
-
-  useEffect(() => {
-    if (!nativeSnapshot || !JOINT_ATTENTION_ENABLED) {
-      jointSmoothRef.current = createJointAttentionSmoothState();
-      setSmoothedJointAttention(false);
-      return;
-    }
-
-    const { state, latched } = advanceJointAttentionSmoothState(
-      jointSmoothRef.current,
-      isJointAttentionFrame(nativeSnapshot),
-    );
-    jointSmoothRef.current = state;
-    setSmoothedJointAttention(latched);
-  }, [nativeSnapshot]);
 
   const snapshot = useMemo<GazeSnapshot>(() => {
     const raw = nativeSnapshot ?? MOCK_GAZE;
@@ -308,7 +314,7 @@ export function useGazeTracking(): UseGazeTrackingResult {
     enableNativeTracking,
     capabilities,
     blockers,
-    setNativeSnapshot,
+    setNativeSnapshot: ingestNativeSnapshot,
     setNativeError,
     runtimeError,
   };

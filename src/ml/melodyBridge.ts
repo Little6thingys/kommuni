@@ -179,7 +179,7 @@ export function buildMelodyBridgeAudio(
           ? [1, 0.22, 0.08]
           : [1, 0.3],
     filterFreq: 760 - calmness * 400,
-    latentEnergy: 0.05 + calmness * 0.24 + envelope * 0.08,
+    latentEnergy: 0.14 + calmness * 0.36 + envelope * 0.14,
     releaseMs: Math.round(450 + calmness * 1750),
     cutPrevious: stress > 0.55,
     calmness,
@@ -213,7 +213,7 @@ export function buildDroneParams(
 
   return {
     rootMidi: nearestPentatonicMidi(state.anchorMidi - 12),
-    level: Math.max(0, calmness - 0.45) * 0.1,
+    level: Math.max(0, calmness - 0.45) * 0.55,
     filterFreq: 220 + calmness * 80,
   };
 }

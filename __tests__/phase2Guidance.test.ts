@@ -80,7 +80,10 @@ describe('phase2Guidance', () => {
   it('plays joint-attention cue and sync reward audio presets', () => {
     const cue = buildJointAttentionCueAudio();
     const sync = buildJointAttentionSyncRewardAudio();
-    expect(cue.notes.length).toBeGreaterThanOrEqual(3);
+    expect(cue.notes).toEqual([67]);
+    expect(cue.overtones).toEqual([1, 0.05]);
+    expect(cue.latentEnergy).toBeLessThan(0.25);
+    expect(cue.calmness).toBeGreaterThan(0.95);
     expect(sync.notes.length).toBeGreaterThanOrEqual(4);
     expect(cue.cutPrevious).toBe(false);
     expect(sync.filterFreq).toBeGreaterThan(cue.filterFreq);
@@ -131,7 +134,8 @@ describe('phase2Guidance', () => {
   it('uses a single gentle sine for the pre-hover whisper', () => {
     const drone = buildPhase2PreHoverDrone();
     expect(drone.timbre).toBe('gentle');
-    expect(drone.level).toBeLessThanOrEqual(0.025);
+    expect(drone.level).toBeGreaterThan(0);
+    expect(drone.level).toBeLessThanOrEqual(0.25);
     expect(buildPhase2SilentDrone().level).toBe(0);
   });
 });

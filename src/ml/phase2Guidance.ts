@@ -148,7 +148,7 @@ export function buildPhase2SilentDrone(): DroneParams {
 export function buildPhase2PreHoverDrone(): DroneParams {
   return {
     rootMidi: 55,
-    level: 0.02,
+    level: 0.2,
     filterFreq: 280,
     timbre: 'gentle',
   };
@@ -167,10 +167,10 @@ export function buildParentCallAudio(): AudioParams {
     notes: [PHASE2_ANCHOR_MIDI],
     overtones: [1, 0.16, 0.05],
     filterFreq: 980,
-    latentEnergy: 0.42,
+    latentEnergy: 0.62,
     releaseMs: PHASE2_PARENT_CALL_RELEASE_MS,
     cutPrevious: false,
-    calmness: 0.78,
+    calmness: 0.72,
     pan: -0.9,
     panEnd: 0,
   };
@@ -183,9 +183,9 @@ export function buildChildComplementaryAudio(
 ): AudioParams {
   const notes = resolveComplementaryChord(fusion.notes, PHASE2_ANCHOR_MIDI);
   const jointAttention = options?.jointAttention === true;
-  let energy = clamp(fusion.latentEnergy ?? 0.5, 0.38, 0.68);
+  let energy = clamp(fusion.latentEnergy ?? 0.5, 0.52, 0.82);
   if (jointAttention) {
-    energy = clamp(energy + 0.08, 0.42, 0.72);
+    energy = clamp(energy + 0.08, 0.56, 0.88);
   }
   const overtones =
     fusion.overtones.length >= 3
@@ -203,22 +203,22 @@ export function buildChildComplementaryAudio(
     latentEnergy: energy,
     releaseMs: jointAttention ? 1320 : 1240,
     cutPrevious: false,
-    calmness: clamp(0.9 - energy * 0.15, 0.78, 0.92),
+    calmness: clamp(0.82 - energy * 0.12, 0.68, 0.86),
     pan: 0.9,
     panEnd: 0,
   };
 }
 
-/** Soft ascending chime when joint attention is first detected. */
+/** Soft single-tone ping when joint attention is first detected — quiet, not a bright chord. */
 export function buildJointAttentionCueAudio(): AudioParams {
   return {
-    notes: [76, 79, 84],
-    overtones: [1, 0.48, 0.22, 0.1],
-    filterFreq: 1520,
-    latentEnergy: 0.44,
-    releaseMs: 520,
+    notes: [67],
+    overtones: [1, 0.05],
+    filterFreq: 620,
+    latentEnergy: 0.18,
+    releaseMs: 1050,
     cutPrevious: false,
-    calmness: 0.88,
+    calmness: 0.98,
     pan: 0,
     panEnd: 0,
   };

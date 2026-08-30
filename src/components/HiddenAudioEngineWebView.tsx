@@ -28,6 +28,8 @@ export function HiddenAudioEngineWebView({
       bounces={false}
       showsHorizontalScrollIndicator={false}
       showsVerticalScrollIndicator={false}
+      allowsInlineMediaPlayback
+      mediaPlaybackRequiresUserAction={false}
       pointerEvents="none"
       style={styles.hidden}
     />
@@ -36,8 +38,11 @@ export function HiddenAudioEngineWebView({
 
 const styles = StyleSheet.create({
   hidden: {
-    width: 1,
-    height: 1,
-    opacity: 0,
+    position: 'absolute',
+    left: -1000,
+    top: 0,
+    width: 120,
+    height: 120,
+    opacity: 0.01,
   },
 });
