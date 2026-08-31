@@ -1,6 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useMetricsStore } from '@/hooks/useMetricsStore';
+import { isDeveloperMode } from '@/session/developerModeStore';
+import { colors, fonts } from '@/theme';
 
 const MAX_ROWS = 5;
 
@@ -28,6 +30,10 @@ export function MetricsDebugOverlay({
   const { entries, summary } = useMetricsStore();
   const recent = [...entries].slice(-MAX_ROWS).reverse();
   const resolvedLatency = latencyMs ?? summary.avgAudioLatencyMs;
+
+  if (!isDeveloperMode()) {
+    return null;
+  }
 
   return (
     <View
@@ -66,10 +72,10 @@ export function MetricsDebugOverlay({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(11, 11, 18, 0.88)',
+    backgroundColor: 'rgba(244, 250, 249, 0.92)',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#2A2A3A',
+    borderColor: colors.lagoon,
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 3,
@@ -83,26 +89,31 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   title: {
-    color: '#C8C8D8',
+    fontFamily: fonts.bodyMedium,
+    color: colors.inkSoft,
     fontSize: 12,
-    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   row: {
-    color: '#F5F5FA',
+    fontFamily: fonts.bodyMedium,
+    color: colors.ink,
     fontSize: 12,
-    fontWeight: '600',
   },
   meta: {
-    color: '#8888A0',
+    fontFamily: fonts.body,
+    color: colors.inkSoft,
     fontSize: 11,
     marginTop: 2,
   },
   empty: {
-    color: '#666680',
+    fontFamily: fonts.body,
+    color: colors.inkSoft,
     fontSize: 11,
   },
   event: {
-    color: '#A9A9C4',
+    fontFamily: fonts.body,
+    color: colors.inkSoft,
     fontSize: 11,
   },
 });

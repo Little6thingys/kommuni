@@ -9,6 +9,7 @@ import {
 } from 'react-native-reanimated';
 
 import { PHASE_TRANSITION_MS } from '@/fsm/constants';
+import { colors } from '@/theme';
 
 type PhaseTransitionOverlayProps = {
   active: boolean;
@@ -59,18 +60,18 @@ export function PhaseTransitionOverlay({
   return (
     <View pointerEvents="none" style={styles.overlay}>
       <Canvas style={StyleSheet.absoluteFill}>
-        <Rect x={0} y={0} width={width} height={height} color="rgba(8, 8, 14, 0.55)" />
+        <Rect x={0} y={0} width={width} height={height} color="rgba(232, 241, 240, 0.55)" />
         <Circle
           cx={centerX}
           cy={centerY}
           r={animatedRadius}
-          color="rgba(126, 182, 255, 0.92)"
+          color={`${colors.ripple}EB`}
         />
         <Circle
           cx={centerX}
           cy={centerY}
           r={animatedRadius}
-          color="rgba(245, 245, 250, 0.18)"
+          color="rgba(244, 250, 249, 0.22)"
           blendMode="screen"
         />
       </Canvas>

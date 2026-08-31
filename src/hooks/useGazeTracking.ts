@@ -65,8 +65,16 @@ export type UseGazeTrackingResult = {
   runtimeError: string | null;
 };
 
+type UseGazeTrackingOptions = {
+  /** When false, camera + joint-attention processing pause (e.g. screen unfocused). */
+  jointAttentionMonitoring?: boolean;
+};
+
 /** JS adapter for Module 2 that degrades cleanly until native MediaPipe wiring is prebuilt. */
-export function useGazeTracking(): UseGazeTrackingResult {
+export function useGazeTracking(options: UseGazeTrackingOptions = {}): UseGazeTrackingResult {
+  const jointAttentionMonitoring = options.jointAttentionMonitoring ?? true;
+  const jointAttentionMonitoringRef = useRef(jointAttentionMonitoring);
+  jointAttentionMonitoringRef.current = jointAttentionMonitoring;
   const [nativeSnapshot, setNativeSnapshot] = useState<GazeSnapshot | null>(null);
   const [smoothedJointAttention, setSmoothedJointAttention] = useState(false);
   const jointSmoothRef = useRef(createJointAttentionSmoothState());
@@ -141,6 +149,7 @@ export function useGazeTracking(): UseGazeTrackingResult {
   ]);
 
   const enableNativeTracking =
+    jointAttentionMonitoring &&
     permissionGranted &&
     Boolean(cameraDevice) &&
     Boolean(mediaPipeModule) &&
@@ -212,6 +221,10 @@ export function useGazeTracking(): UseGazeTrackingResult {
   }, []);
 
   const ingestNativeSnapshot = useCallback((next: GazeSnapshot) => {
+    if (!jointAttentionMonitoringRef.current) {
+      return;
+    }
+
     setNativeSnapshot(next);
 
     if (!JOINT_ATTENTION_ENABLED) {
@@ -229,6 +242,17 @@ export function useGazeTracking(): UseGazeTrackingResult {
       setSmoothedJointAttention(latched);
     }
   }, []);
+
+  useEffect(() => {
+    if (jointAttentionMonitoring) {
+      return;
+    }
+
+    setNativeSnapshot(null);
+    jointSmoothRef.current = createJointAttentionSmoothState();
+    smoothedJointAttentionRef.current = false;
+    setSmoothedJointAttention(false);
+  }, [jointAttentionMonitoring]);
 
   useEffect(() => {
     let cancelled = false;
@@ -294,9 +318,13 @@ export function useGazeTracking(): UseGazeTrackingResult {
     const raw = nativeSnapshot ?? MOCK_GAZE;
     return {
       ...raw,
-      isJointAttention: JOINT_ATTENTION_ENABLED && nativeSnapshot !== null && smoothedJointAttention,
+      isJointAttention:
+        jointAttentionMonitoring &&
+        JOINT_ATTENTION_ENABLED &&
+        nativeSnapshot !== null &&
+        smoothedJointAttention,
     };
-  }, [nativeSnapshot, smoothedJointAttention]);
+  }, [jointAttentionMonitoring, nativeSnapshot, smoothedJointAttention]);
 
   return {
     snapshot,
@@ -310,7 +338,8 @@ export function useGazeTracking(): UseGazeTrackingResult {
     openSettings,
     cameraDevice,
     modelPath,
-    showLiveCameraPreview: permissionGranted && Boolean(cameraDevice),
+    showLiveCameraPreview:
+      jointAttentionMonitoring && permissionGranted && Boolean(cameraDevice),
     enableNativeTracking,
     capabilities,
     blockers,

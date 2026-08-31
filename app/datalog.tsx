@@ -1,5 +1,5 @@
-import { Link } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,10 +10,12 @@ import {
   View,
 } from 'react-native';
 
+import { DATALOG_GUI } from '@/copy/phaseTitles';
 import { MetricsDebugOverlay } from '@/components/MetricsDebugOverlay';
 import { ScreenShell } from '@/components/ScreenShell';
+import { SessionHighlightsChart } from '@/components/SessionHighlightsChart';
 import { useMetricsStore } from '@/hooks/useMetricsStore';
-import { buildDemoSessionHighlights } from '@/metrics/demoSessionSummary';
+import { colors, fonts, radii } from '@/theme';
 import { MetricEntry } from '@/types';
 
 function formatPayload(entry: MetricEntry): string {
@@ -38,12 +40,9 @@ function kindLabel(kind: MetricEntry['kind']): string {
 }
 
 export default function DataLogScreen() {
+  const router = useRouter();
   const { entries, summary, clear, shareCsvExport, shareEncryptedJsonExport } = useMetricsStore();
   const [exporting, setExporting] = useState<'csv' | 'json' | null>(null);
-  const demoHighlights = useMemo(
-    () => (summary.demoMode ? buildDemoSessionHighlights(entries) : null),
-    [entries, summary.demoMode],
-  );
 
   const handleShareCsv = async () => {
     setExporting('csv');
@@ -73,84 +72,34 @@ export default function DataLogScreen() {
   };
 
   const handleClear = () => {
-    Alert.alert('Clear session metrics?', 'This removes in-memory entries for the current session.', [
+    Alert.alert(DATALOG_GUI.clearDataLogTitle, DATALOG_GUI.clearDataLogMessage, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Clear', style: 'destructive', onPress: clear },
+      { text: DATALOG_GUI.clearDataLogConfirm, style: 'destructive', onPress: clear },
     ]);
   };
 
   return (
-    <ScreenShell
-      title="Data & Log"
-      subtitle={
-        summary.demoMode
-          ? 'Demo session — caregiver showcase metrics plus full event log'
-          : 'Session metrics with encrypted JSON and plain CSV export'
-      }
-    >
-      <MetricsDebugOverlay />
+    <View style={styles.screen}>
+      <ScreenShell
+        title="Data & Log"
+        subtitle="Session metrics with encrypted JSON and plain CSV export"
+      >
+        <MetricsDebugOverlay />
 
-      {summary.demoMode && demoHighlights ? (
-        <View style={styles.demoCard}>
-          <View style={styles.demoBadgeRow}>
-            <Text style={styles.demoBadge}>Demo Mode</Text>
-            <Text style={styles.demoBadgeHint}>Parent-facing showcase session</Text>
-          </View>
-          <Text style={styles.cardTitle}>Showcase summary</Text>
-          <Text style={styles.demoIntro}>
-            Highlights from the calm-down → turn-taking flow. The full metrics table below is
-            unchanged.
-          </Text>
-          <View style={styles.demoGrid}>
-            <View style={styles.demoStat}>
-              <Text style={styles.demoStatValue}>{demoHighlights.phase1TouchInferences}</Text>
-              <Text style={styles.demoStatLabel}>Phase 1 touch notes</Text>
-            </View>
-            <View style={styles.demoStat}>
-              <Text style={styles.demoStatValue}>
-                {demoHighlights.avgPhase1Stress != null
-                  ? `${Math.round(demoHighlights.avgPhase1Stress * 100)}%`
-                  : '—'}
-              </Text>
-              <Text style={styles.demoStatLabel}>Avg touch stress</Text>
-            </View>
-            <View style={styles.demoStat}>
-              <Text style={styles.demoStatValue}>{demoHighlights.phase2ChildResponses}</Text>
-              <Text style={styles.demoStatLabel}>Child responses</Text>
-            </View>
-            <View style={styles.demoStat}>
-              <Text style={styles.demoStatValue}>{demoHighlights.jointAttentionMoments}</Text>
-              <Text style={styles.demoStatLabel}>Joint attention</Text>
-            </View>
-            <View style={styles.demoStat}>
-              <Text style={styles.demoStatValue}>{demoHighlights.rewardMoments}</Text>
-              <Text style={styles.demoStatLabel}>Turn rewards</Text>
-            </View>
-            <View style={styles.demoStat}>
-              <Text style={styles.demoStatValue}>{demoHighlights.musicHoverBeats}</Text>
-              <Text style={styles.demoStatLabel}>Music hover 😊</Text>
-            </View>
-          </View>
-          {demoHighlights.avgPhase2InferenceMs != null ? (
-            <Text style={styles.summaryRow}>
-              Avg Phase 2 inference: {demoHighlights.avgPhase2InferenceMs.toFixed(1)} ms
-            </Text>
-          ) : null}
-          {entries.length === 0 ? (
-            <Text style={styles.demoEmpty}>
-              No demo events yet. Start a Demo Mode session from Setup, play Phase 1, then finish
-              Phase 2.
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
+        <Pressable
+          style={[styles.button, styles.buttonDanger, styles.clearTopButton, entries.length === 0 && styles.buttonDisabled]}
+          onPress={handleClear}
+          disabled={entries.length === 0}
+        >
+          <Text style={styles.buttonDangerText}>{DATALOG_GUI.clearDataLogLabel}</Text>
+        </Pressable>
 
       <View style={styles.summaryCard}>
         <Text style={styles.cardTitle}>Session</Text>
         <Text style={styles.summaryRow}>ID: {summary.sessionId}</Text>
         <Text style={styles.summaryRow}>Started: {summary.startedAt}</Text>
         <Text style={styles.summaryRow}>
-          Mode: {summary.demoMode ? 'Demo showcase' : 'Research'}
+          Mode: {summary.developerMode ? 'Developer' : 'Normal'}
         </Text>
         <Text style={styles.summaryRow}>Entries: {summary.entryCount}</Text>
         {summary.avgAudioLatencyMs != null ? (
@@ -167,13 +116,13 @@ export default function DataLogScreen() {
         </View>
       </View>
 
+      <SessionHighlightsChart entries={entries} />
+
       <View style={styles.tableCard}>
         <Text style={styles.cardTitle}>Metrics ({entries.length})</Text>
         {entries.length === 0 ? (
           <Text style={styles.empty}>
-            {summary.demoMode
-              ? 'No session metrics recorded yet. Complete the demo flow (Phase 1 → Phase 2).'
-              : 'No session metrics recorded yet. Play notes on Phase 1 or run Benchmark Mode.'}
+            No session metrics recorded yet. Play notes on Phase 1 or run Benchmark Mode.
           </Text>
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -208,7 +157,7 @@ export default function DataLogScreen() {
           disabled={exporting != null || entries.length === 0}
         >
           {exporting === 'csv' ? (
-            <ActivityIndicator color="#0B0B12" />
+            <ActivityIndicator color={colors.foam} />
           ) : (
             <Text style={styles.buttonPrimaryText}>Export CSV (share)</Text>
           )}
@@ -220,116 +169,77 @@ export default function DataLogScreen() {
           disabled={exporting != null || entries.length === 0}
         >
           {exporting === 'json' ? (
-            <ActivityIndicator color="#C8C8D8" />
+            <ActivityIndicator color={colors.inkSoft} />
           ) : (
             <Text style={styles.buttonSecondaryText}>Export encrypted JSON (share)</Text>
           )}
         </Pressable>
-
-        <Pressable
-          style={[styles.button, styles.buttonGhost]}
-          onPress={handleClear}
-          disabled={entries.length === 0}
-        >
-          <Text style={styles.buttonGhostText}>Clear session</Text>
-        </Pressable>
-
-        <Link href="/" style={styles.link}>
-          ← Back to Setup
-        </Link>
       </View>
-    </ScreenShell>
+      </ScreenShell>
+
+      <Pressable
+        style={({ pressed }) => [styles.cornerHomeButton, pressed && styles.cornerHomeButtonPressed]}
+        onPress={() => router.push('/')}
+      >
+        <Text style={styles.cornerHomeButtonText}>{DATALOG_GUI.backHomeShortLabel}</Text>
+      </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  demoCard: {
-    marginTop: 16,
-    backgroundColor: '#182018',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#2F4A35',
-    padding: 16,
-    gap: 10,
+  screen: {
+    flex: 1,
   },
-  demoBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flexWrap: 'wrap',
+  cornerHomeButton: {
+    position: 'absolute',
+    bottom: 24,
+    right: 16,
+    backgroundColor: colors.deepTide,
+    borderRadius: radii.button,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    minHeight: 36,
+    justifyContent: 'center',
+    zIndex: 10,
   },
-  demoBadge: {
-    color: '#0B0B12',
-    backgroundColor: '#9BFFC0',
-    fontSize: 12,
-    fontWeight: '800',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    overflow: 'hidden',
+  cornerHomeButtonPressed: {
+    opacity: 0.85,
   },
-  demoBadgeHint: {
-    color: '#A8DDB8',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  demoIntro: {
-    color: '#A8DDB8',
+  cornerHomeButtonText: {
+    fontFamily: fonts.bodyMedium,
+    color: colors.foam,
     fontSize: 13,
-    lineHeight: 18,
-  },
-  demoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  demoStat: {
-    width: '30%',
-    minWidth: 96,
-    flexGrow: 1,
-    backgroundColor: '#101810',
-    borderRadius: 10,
-    padding: 10,
-    gap: 4,
-  },
-  demoStatValue: {
-    color: '#E8FFF0',
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  demoStatLabel: {
-    color: '#7CB892',
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '600',
-  },
-  demoEmpty: {
-    color: '#7CB892',
-    fontSize: 13,
-    lineHeight: 18,
   },
   summaryCard: {
     marginTop: 16,
-    backgroundColor: '#151522',
-    borderRadius: 12,
+    backgroundColor: colors.foam,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.lagoon,
     padding: 16,
     gap: 6,
   },
   tableCard: {
     marginTop: 16,
-    backgroundColor: '#151522',
-    borderRadius: 12,
+    backgroundColor: colors.foam,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.lagoon,
     padding: 16,
     gap: 10,
     minHeight: 180,
   },
   cardTitle: {
-    color: '#C8C8D8',
+    fontFamily: fonts.bodyMedium,
+    color: colors.ink,
     fontSize: 14,
-    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   summaryRow: {
-    color: '#8888A0',
+    fontFamily: fonts.body,
+    color: colors.inkSoft,
     fontSize: 13,
   },
   kindRow: {
@@ -339,22 +249,24 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   kindChip: {
-    color: '#A9A9C4',
+    fontFamily: fonts.body,
+    color: colors.inkSoft,
     fontSize: 12,
-    backgroundColor: '#1E1E2E',
+    backgroundColor: colors.rippleSoft,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 999,
+    borderRadius: radii.pill,
   },
   empty: {
-    color: '#666680',
+    fontFamily: fonts.body,
+    color: colors.inkSoft,
     fontSize: 14,
     lineHeight: 20,
   },
   tableHeader: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#2A2A3A',
+    borderBottomColor: colors.lagoon,
     paddingBottom: 8,
     marginBottom: 4,
   },
@@ -362,15 +274,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#232333',
+    borderBottomColor: colors.rippleSoft,
   },
   headerCell: {
-    color: '#666680',
+    fontFamily: fonts.bodyMedium,
+    color: colors.inkSoft,
     fontSize: 12,
-    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   cell: {
-    color: '#8888A0',
+    fontFamily: fonts.body,
+    color: colors.ink,
     fontSize: 13,
   },
   timeCol: {
@@ -386,8 +301,12 @@ const styles = StyleSheet.create({
     marginTop: 24,
     gap: 12,
   },
+  clearTopButton: {
+    marginTop: 4,
+    marginBottom: 4,
+  },
   button: {
-    borderRadius: 10,
+    borderRadius: radii.button,
     paddingVertical: 14,
     paddingHorizontal: 16,
     alignItems: 'center',
@@ -395,38 +314,42 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   buttonPrimary: {
-    backgroundColor: '#7EB6FF',
+    backgroundColor: colors.deepTide,
   },
   buttonPrimaryText: {
-    color: '#0B0B12',
+    fontFamily: fonts.bodyMedium,
+    color: colors.foam,
     fontSize: 15,
-    fontWeight: '700',
   },
   buttonSecondary: {
-    backgroundColor: '#1E1E2E',
+    backgroundColor: colors.foam,
     borderWidth: 1,
-    borderColor: '#3A3A4E',
+    borderColor: colors.lagoon,
   },
   buttonSecondaryText: {
-    color: '#C8C8D8',
+    fontFamily: fonts.bodyMedium,
+    color: colors.ink,
     fontSize: 14,
-    fontWeight: '600',
   },
   buttonGhost: {
     backgroundColor: 'transparent',
   },
   buttonGhostText: {
-    color: '#8888A0',
+    fontFamily: fonts.bodyMedium,
+    color: colors.inkSoft,
     fontSize: 14,
-    fontWeight: '600',
+  },
+  buttonDanger: {
+    backgroundColor: colors.foam,
+    borderWidth: 1,
+    borderColor: '#C47A7A',
+  },
+  buttonDangerText: {
+    fontFamily: fonts.bodyMedium,
+    color: '#9A3F3F',
+    fontSize: 14,
   },
   buttonDisabled: {
     opacity: 0.6,
-  },
-  link: {
-    color: '#7EB6FF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginTop: 4,
   },
 });

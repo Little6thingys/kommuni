@@ -41,8 +41,13 @@ export type Phase2TapPulse = {
   tick: number;
 };
 
-export function usePhase2Session() {
-  const gaze = useGazeTracking();
+export type UsePhase2SessionOptions = {
+  jointAttentionMonitoring?: boolean;
+};
+
+export function usePhase2Session(options: UsePhase2SessionOptions = {}) {
+  const jointAttentionMonitoring = options.jointAttentionMonitoring ?? true;
+  const gaze = useGazeTracking({ jointAttentionMonitoring });
   const { infer: inferHarmoniNet, reset: resetHarmoniNet } = useHarmoniNet();
   const { fuse } = useCrossAttentionFusion();
   const audio = useAudioEngine();
@@ -417,6 +422,11 @@ export function usePhase2Session() {
   }, []);
 
   useEffect(() => {
+    if (!jointAttentionMonitoring) {
+      wasJointAttentionRef.current = false;
+      return;
+    }
+
     const active = gaze.snapshot.isJointAttention && !musicHoverActiveRef.current;
     if (!active) {
       wasJointAttentionRef.current = false;
@@ -440,7 +450,13 @@ export function usePhase2Session() {
       audio.resume();
       audio.playNote(buildJointAttentionCueAudio());
     }
-  }, [audio.isReady, audio.playNote, audio.resume, gaze.snapshot.isJointAttention]);
+  }, [
+    audio.isReady,
+    audio.playNote,
+    audio.resume,
+    gaze.snapshot.isJointAttention,
+    jointAttentionMonitoring,
+  ]);
 
   return {
     gaze,

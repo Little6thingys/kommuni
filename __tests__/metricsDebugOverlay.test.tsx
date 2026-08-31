@@ -1,9 +1,23 @@
 import { render } from '@testing-library/react-native';
 
 import { MetricsDebugOverlay } from '@/components/MetricsDebugOverlay';
+import { setDeveloperMode } from '@/session/developerModeStore';
 
 describe('MetricsDebugOverlay', () => {
-  it('renders live latency, stress, FSM, gaze, and consonance', () => {
+  beforeEach(() => {
+    setDeveloperMode(false);
+  });
+
+  it('renders nothing when developer mode is off', () => {
+    const { queryByText } = render(
+      <MetricsDebugOverlay latencyMs={4.2} stress={0.18} fsm="PATIENCE" />,
+    );
+
+    expect(queryByText('Debug')).toBeNull();
+  });
+
+  it('renders live latency, stress, FSM, gaze, and consonance in developer mode', () => {
+    setDeveloperMode(true);
     const { getByText } = render(
       <MetricsDebugOverlay
         latencyMs={4.2}

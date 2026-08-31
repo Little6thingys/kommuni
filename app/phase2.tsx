@@ -1,9 +1,10 @@
-import { useRouter } from 'expo-router';
+import { useIsFocused, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GazeTrackingPreview } from '@/components/GazeTrackingPreview';
+import { PHASE2_GUI } from '@/copy/phaseTitles';
 import { HiddenAudioEngineWebView } from '@/components/HiddenAudioEngineWebView';
 import { JointAttentionIndicator } from '@/components/JointAttentionIndicator';
 import { MetricsDebugOverlay } from '@/components/MetricsDebugOverlay';
@@ -12,10 +13,12 @@ import { Phase2RippleStage } from '@/components/Phase2RippleStage';
 import { Phase2TopBar } from '@/components/Phase2TopBar';
 import { usePhase2Session } from '@/hooks/usePhase2Session';
 import { computeConsonanceRate } from '@/metrics/consonance';
+import { colors, fonts, radii } from '@/theme';
 
 export default function Phase2Screen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
   const [lowerHeight, setLowerHeight] = useState(200);
   const [rewardFlash, setRewardFlash] = useState(false);
   const {
@@ -32,7 +35,7 @@ export default function Phase2Screen() {
     successfulTurnRounds,
     handleTap,
     resetSession,
-  } = usePhase2Session();
+  } = usePhase2Session({ jointAttentionMonitoring: isFocused });
 
   useEffect(() => {
     if (!turnRewardTick) {
@@ -130,14 +133,18 @@ export default function Phase2Screen() {
 
           <View style={styles.actions}>
             <Pressable onPress={resetSession} style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>Reset session</Text>
+              <Text style={styles.secondaryButtonText}>
+                {PHASE2_GUI.resetSessionShortLabel}
+              </Text>
             </Pressable>
             <Pressable
               onPress={() => router.push('/datalog')}
-              hitSlop={10}
-              style={({ pressed }) => [styles.endSessionButton, pressed && styles.endSessionButtonPressed]}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                pressed && styles.primaryButtonPressed,
+              ]}
             >
-              <Text style={styles.link}>End session → Data Log</Text>
+              <Text style={styles.primaryButtonText}>{PHASE2_GUI.dataLogShortLabel}</Text>
             </Pressable>
           </View>
 
@@ -160,7 +167,7 @@ export default function Phase2Screen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#0B0B12',
+    backgroundColor: colors.mist,
   },
   debugSlot: {
     position: 'absolute',
@@ -173,7 +180,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    backgroundColor: '#12131A',
+    backgroundColor: colors.lagoon,
     overflow: 'hidden',
     zIndex: 1,
   },
@@ -196,7 +203,8 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   cameraPlaceholderText: {
-    color: '#8888A0',
+    fontFamily: fonts.body,
+    color: colors.inkSoft,
     fontSize: 14,
     textAlign: 'center',
   },
@@ -217,7 +225,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 40,
     elevation: 40,
-    backgroundColor: '#0B0B12',
+    backgroundColor: colors.mist,
   },
   lowerSafe: {
     gap: 4,
@@ -226,69 +234,66 @@ const styles = StyleSheet.create({
     flexGrow: 0,
     flexShrink: 0,
     borderTopWidth: 1,
-    borderTopColor: '#2A3348',
+    borderTopColor: colors.lagoon,
     overflow: 'hidden',
   },
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 10,
-  },
-  endSessionButton: {
+    justifyContent: 'flex-end',
+    paddingHorizontal: 8,
     paddingVertical: 6,
-    paddingHorizontal: 2,
-    minHeight: 44,
-    justifyContent: 'center',
+    gap: 6,
   },
-  endSessionButtonPressed: {
-    opacity: 0.7,
+  primaryButtonPressed: {
+    opacity: 0.85,
   },
   primaryButton: {
-    borderRadius: 999,
-    backgroundColor: '#7EB6FF',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    borderRadius: radii.button,
+    backgroundColor: colors.deepTide,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minHeight: 36,
+    justifyContent: 'center',
   },
   primaryButtonText: {
-    color: '#0B0B12',
-    fontWeight: '700',
+    fontFamily: fonts.bodyMedium,
+    color: colors.foam,
+    fontSize: 13,
   },
   secondaryButton: {
-    borderRadius: 999,
+    borderRadius: radii.button,
     borderWidth: 1,
-    borderColor: '#35354A',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    borderColor: colors.lagoon,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 36,
   },
   secondaryButtonText: {
-    color: '#C8C8D8',
-    fontWeight: '600',
+    fontFamily: fonts.bodyMedium,
+    color: colors.inkSoft,
+    fontSize: 13,
   },
   banner: {
-    borderRadius: 12,
-    backgroundColor: '#261A1A',
+    borderRadius: radii.card,
+    backgroundColor: colors.foam,
     borderWidth: 1,
-    borderColor: '#593535',
+    borderColor: colors.warnSoft,
     padding: 12,
     gap: 4,
     marginHorizontal: 12,
     marginBottom: 8,
   },
   bannerTitle: {
-    color: '#FFC9C9',
-    fontWeight: '700',
+    fontFamily: fonts.bodyMedium,
+    color: colors.ink,
   },
   bannerText: {
-    color: '#F2C0C0',
+    fontFamily: fonts.body,
+    color: colors.inkSoft,
     fontSize: 13,
     lineHeight: 18,
-  },
-  link: {
-    color: '#7EB6FF',
-    fontSize: 14,
-    fontWeight: '600',
   },
 });

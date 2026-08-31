@@ -2,18 +2,23 @@ import { ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { colors, fonts, spacing, typography } from '@/theme';
+
 type ScreenShellProps = {
   title: string;
   subtitle?: string;
   children: ReactNode;
+  centered?: boolean;
 };
 
-export function ScreenShell({ title, subtitle, children }: ScreenShellProps) {
+export function ScreenShell({ title, subtitle, children, centered = false }: ScreenShellProps) {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.title}>{title}</Text>
+      <ScrollView
+        contentContainerStyle={[styles.content, centered && styles.contentCentered]}
+      >
+        <View style={[styles.header, centered && styles.headerCentered]}>
+          <Text style={[styles.title, centered && styles.titleCentered]}>{title}</Text>
           {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
         </View>
         {children}
@@ -25,25 +30,39 @@ export function ScreenShell({ title, subtitle, children }: ScreenShellProps) {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#0B0B12',
+    backgroundColor: colors.mist,
   },
   content: {
     flexGrow: 1,
-    padding: 20,
+    paddingHorizontal: spacing.screenPadding,
     paddingBottom: 32,
+    maxWidth: spacing.contentMaxWidth + spacing.screenPadding * 2,
+    alignSelf: 'center',
+    width: '100%',
+  },
+  contentCentered: {
+    justifyContent: 'center',
+    minHeight: '100%',
   },
   header: {
     marginBottom: 20,
+    marginTop: 8,
+  },
+  headerCentered: {
+    alignItems: 'center',
+    marginBottom: 48,
   },
   title: {
-    color: '#F5F5FA',
-    fontSize: 28,
-    fontWeight: '700',
+    ...typography.displayTitle,
+  },
+  titleCentered: {
+    textAlign: 'center',
   },
   subtitle: {
-    color: '#8888A0',
-    fontSize: 14,
-    marginTop: 6,
-    lineHeight: 20,
+    fontFamily: fonts.body,
+    color: colors.inkSoft,
+    fontSize: 15,
+    marginTop: 8,
+    lineHeight: 22,
   },
 });

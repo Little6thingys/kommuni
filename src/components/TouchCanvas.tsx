@@ -15,13 +15,13 @@ import {
   TouchFeatureTuple,
   TouchPoint,
 } from '@/ml/touchFeatureExtraction';
+import { colors, fonts, visual } from '@/theme';
 
 import { CALM_AMBIENT_BLOBS, CALM_SPARKLE_COUNT, calmSparklePoint } from './calmAmbient';
 
 const TRAIL_LENGTH = 24;
 const LATENT_BAR_COUNT = 8;
 const LATENT_DOCK_HEIGHT = 96;
-const LATENT_BAR_HUES = [188, 210, 232, 255, 168, 145, 38, 285] as const;
 
 function latentDisplayLevel(
   z: Float32Array,
@@ -42,12 +42,12 @@ function latentBarColor(
   stressLevel: number,
   zValue: number,
 ): string {
-  const baseHue = LATENT_BAR_HUES[index % LATENT_BAR_HUES.length];
-  const warmShift = stressLevel * 28;
+  const baseHue = visual.phase1LatentBarHues[index % visual.phase1LatentBarHues.length];
+  const warmShift = stressLevel * 22;
   const hue = (baseHue + warmShift) % 360;
-  const lightness = 46 + level * 30 + (zValue >= 0 ? 6 : 0);
-  const saturation = 74 + level * 20;
-  return `hsla(${hue}, ${saturation}%, ${lightness}%, ${0.82 + level * 0.16})`;
+  const lightness = 38 + level * 26 + (zValue >= 0 ? 6 : 0);
+  const saturation = 42 + level * 32 + (index % 3) * 6;
+  return `hsla(${hue}, ${saturation}%, ${lightness}%, ${0.58 + level * 0.38})`;
 }
 
 type TouchCanvasProps = {
@@ -61,7 +61,12 @@ type TouchCanvasProps = {
 };
 
 function stressHue(stressLevel: number): number {
-  return 210 - stressLevel * 150;
+  const t = Math.min(1, Math.max(0, stressLevel));
+  return visual.phase1CalmHue + (visual.phase1StressedHue - visual.phase1CalmHue) * t;
+}
+
+function touchAccentHue(stressLevel: number): number {
+  return (stressHue(stressLevel) + 165) % 360;
 }
 
 export function TouchCanvas({
@@ -134,7 +139,6 @@ export function TouchCanvas({
     [recordPoint],
   );
 
-  const hue = stressHue(stressLevel);
   const touchRadius = 18 + stressLevel * 28;
   const latentBarWidth = Math.max(12, (size.width - 48) / LATENT_BAR_COUNT - 8);
   const latentDockY = Math.max(
@@ -161,11 +165,7 @@ export function TouchCanvas({
           <LinearGradient
             start={vec(0, 0)}
             end={vec(size.width, size.height)}
-            colors={
-              edgeToEdge
-                ? ['#081018', '#102038', '#141830', '#0A1220']
-                : ['#0B0B12', '#12182A', '#0B0B12']
-            }
+            colors={[...visual.phase1Gradient]}
           />
         </Rect>
 
@@ -179,7 +179,7 @@ export function TouchCanvas({
                   cx={blob.x * size.width + Math.sin(ambientDrift * 0.25 + index) * 10}
                   cy={blob.y * size.height + Math.cos(ambientDrift * 0.22 + index) * 8}
                   r={radius}
-                  color={`hsla(${blob.hue}, 58%, 56%, ${0.11 + pulse * 0.09})`}
+                  color={`hsla(${blob.hue}, ${blob.sat}%, 64%, ${0.16 + pulse * 0.12})`}
                 />
               );
             })
@@ -189,14 +189,14 @@ export function TouchCanvas({
           ? Array.from({ length: CALM_SPARKLE_COUNT }, (_, index) => {
               const sparkle = calmSparklePoint(index, size.width, size.height);
               const twinkle =
-                0.3 + 0.26 * Math.sin(ambientDrift * 0.6 + index * 0.55);
+                0.18 + 0.16 * Math.sin(ambientDrift * 0.6 + index * 0.55);
               return (
                 <Circle
                   key={`ambient-sparkle-${index}`}
                   cx={sparkle.x}
                   cy={sparkle.y}
                   r={sparkle.radius}
-                  color={`hsla(${sparkle.hue}, 76%, 72%, ${twinkle})`}
+                  color={`hsla(${sparkle.hue}, ${sparkle.sat}%, 58%, ${twinkle})`}
                 />
               );
             })
@@ -204,13 +204,16 @@ export function TouchCanvas({
 
         {trail.map((point, index) => {
           const alpha = (index + 1) / trail.length;
+          const trailHue =
+            (stressHue(stressLevel) + index * 7 + (index % 3) * 28) % 360;
+          const trailSat = 46 + (index % 4) * 10;
           return (
             <Circle
               key={`${point.t}-${index}`}
               cx={point.x}
               cy={point.y}
               r={4 + alpha * 10}
-              color={`hsla(${hue}, 78%, ${42 + alpha * 24}%, ${alpha * 0.45})`}
+              color={`hsla(${trailHue}, ${trailSat}%, 50%, ${alpha * 0.48})`}
             />
           );
         })}
@@ -221,13 +224,19 @@ export function TouchCanvas({
               cx={touchPoint.x}
               cy={touchPoint.y}
               r={touchRadius}
-              color={`hsla(${hue}, 85%, ${55 + stressLevel * 20}%, 0.22)`}
+              color={`hsla(${touchAccentHue(stressLevel)}, 50%, 56%, 0.22)`}
+            />
+            <Circle
+              cx={touchPoint.x}
+              cy={touchPoint.y}
+              r={touchRadius * 0.55}
+              color={`hsla(${stressHue(stressLevel)}, 58%, 46%, 0.14)`}
             />
             <Circle
               cx={touchPoint.x}
               cy={touchPoint.y}
               r={8 + stressLevel * 10}
-              color={`hsl(${hue}, 88%, ${62 + stressLevel * 18}%)`}
+              color={`hsla(${stressHue(stressLevel)}, 62%, 44%, 0.82)`}
             />
           </Group>
         ) : null}
@@ -248,7 +257,7 @@ export function TouchCanvas({
                     width={latentBarWidth}
                     height={LATENT_DOCK_HEIGHT - 12}
                     r={7}
-                    color="rgba(18, 22, 38, 0.72)"
+                    color="rgba(183, 212, 208, 0.28)"
                   />
                   <RoundedRect
                     x={x}
@@ -264,7 +273,7 @@ export function TouchCanvas({
                     width={Math.max(4, latentBarWidth - 4)}
                     height={Math.max(6, barHeight * pulse * 0.35)}
                     r={4}
-                    color={`rgba(255, 255, 255, ${0.08 + level * 0.18})`}
+                    color={`rgba(255, 255, 255, ${0.12 + level * 0.2})`}
                   />
                 </Group>
               );
@@ -290,9 +299,9 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: '#0B0B12',
+    backgroundColor: colors.mist,
     borderWidth: 1,
-    borderColor: '#222233',
+    borderColor: colors.lagoon,
   },
   containerEdgeToEdge: {
     borderRadius: 0,
@@ -308,16 +317,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   hintText: {
-    color: '#8888A0',
+    fontFamily: fonts.bodyMedium,
+    color: colors.inkSoft,
     fontSize: 14,
-    fontWeight: '600',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 999,
     overflow: 'hidden',
-    backgroundColor: 'rgba(16, 18, 28, 0.72)',
+    backgroundColor: 'rgba(244, 250, 249, 0.82)',
     borderWidth: 1,
-    borderColor: '#2A3348',
+    borderColor: colors.lagoon,
   },
   hintTextEdge: {
     marginTop: 48,

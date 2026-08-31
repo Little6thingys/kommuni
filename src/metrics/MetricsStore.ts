@@ -8,7 +8,7 @@ export type SessionSummary = {
   entryCount: number;
   byKind: Record<MetricKind, number>;
   avgAudioLatencyMs: number | null;
-  demoMode: boolean;
+  developerMode: boolean;
 };
 
 export type MetricsExportResult = {
@@ -40,15 +40,15 @@ class MetricsStoreImpl {
   private listeners = new Set<Listener>();
   private sessionId = createSessionId();
   private startedAt = new Date().toISOString();
-  private demoMode = false;
+  private developerMode = false;
 
-  setSessionDemoMode(enabled: boolean): void {
-    this.demoMode = enabled;
+  setSessionDeveloperMode(enabled: boolean): void {
+    this.developerMode = enabled;
     this.notify();
   }
 
-  isSessionDemoMode(): boolean {
-    return this.demoMode;
+  isSessionDeveloperMode(): boolean {
+    return this.developerMode;
   }
 
   record(entry: Omit<MetricEntry, 'id' | 'timestamp'>): MetricEntry {
@@ -96,7 +96,7 @@ class MetricsStoreImpl {
       entryCount: this.entries.length,
       byKind,
       avgAudioLatencyMs: latencyCount > 0 ? latencySum / latencyCount : null,
-      demoMode: this.demoMode,
+      developerMode: this.developerMode,
     };
   }
 
@@ -193,7 +193,7 @@ class MetricsStoreImpl {
     this.entries = [];
     this.sessionId = createSessionId();
     this.startedAt = new Date().toISOString();
-    this.demoMode = false;
+    this.developerMode = false;
     this.notify();
   }
 

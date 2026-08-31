@@ -12,6 +12,7 @@ import { ScreenShell } from '@/components/ScreenShell';
 import { useBenchmarkRunner } from '@/hooks/useBenchmarkRunner';
 import { BENCHMARK_PROFILE_COUNT, BENCHMARK_THRESHOLDS } from '@/metrics/constants';
 import { BenchmarkCriterion } from '@/metrics/benchmarkHarness';
+import { colors, fonts, radii } from '@/theme';
 
 const BENCHMARK_TARGETS = [
   {
@@ -87,7 +88,7 @@ export default function BenchmarkScreen() {
           disabled={isRunning}
         >
           {isRunning ? (
-            <ActivityIndicator color="#0B0B12" />
+            <ActivityIndicator color={colors.foam} />
           ) : (
             <Text style={styles.buttonText}>Run benchmark</Text>
           )}
@@ -156,7 +157,7 @@ export default function BenchmarkScreen() {
       </View>
 
       <Link href="/" style={styles.link}>
-        ← Back to Setup
+        ← Back to home
       </Link>
     </ScreenShell>
   );
@@ -165,36 +166,44 @@ export default function BenchmarkScreen() {
 const styles = StyleSheet.create({
   card: {
     marginTop: 16,
-    backgroundColor: '#151522',
-    borderRadius: 12,
+    backgroundColor: colors.foam,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.lagoon,
     padding: 16,
     gap: 8,
   },
   runnerCard: {
     marginTop: 16,
-    backgroundColor: '#151522',
-    borderRadius: 12,
+    backgroundColor: colors.foam,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.lagoon,
     padding: 16,
     gap: 12,
   },
   cardTitle: {
-    color: '#C8C8D8',
+    fontFamily: fonts.bodyMedium,
+    color: colors.ink,
     fontSize: 14,
-    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
     marginBottom: 4,
   },
   target: {
-    color: '#8888A0',
+    fontFamily: fonts.body,
+    color: colors.inkSoft,
     fontSize: 14,
   },
   runnerHint: {
-    color: '#666680',
+    fontFamily: fonts.body,
+    color: colors.inkSoft,
     fontSize: 14,
     lineHeight: 20,
   },
   button: {
-    backgroundColor: '#7EB6FF',
-    borderRadius: 10,
+    backgroundColor: colors.deepTide,
+    borderRadius: radii.button,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
@@ -204,25 +213,26 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   buttonText: {
-    color: '#0B0B12',
+    fontFamily: fonts.bodyMedium,
+    color: colors.foam,
     fontSize: 15,
-    fontWeight: '700',
   },
   progressBlock: {
     gap: 8,
   },
   progressTrack: {
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: '#232333',
+    height: 6,
+    borderRadius: radii.pill,
+    backgroundColor: 'rgba(61, 111, 106, 0.15)',
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#7EB6FF',
+    backgroundColor: colors.tide,
   },
   progressLabel: {
-    color: '#8888A0',
+    fontFamily: fonts.body,
+    color: colors.inkSoft,
     fontSize: 13,
   },
   resetButton: {
@@ -231,41 +241,46 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   resetButtonText: {
-    color: '#8888A0',
+    fontFamily: fonts.bodyMedium,
+    color: colors.inkSoft,
     fontSize: 14,
-    fontWeight: '600',
   },
   report: {
     marginTop: 24,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: radii.card,
     borderWidth: 1,
-    borderColor: '#2A2A3A',
+    borderColor: colors.lagoon,
+    backgroundColor: colors.foam,
   },
   reportLabel: {
-    color: '#C8C8D8',
+    fontFamily: fonts.bodyMedium,
+    color: colors.ink,
     fontSize: 14,
-    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
     marginBottom: 8,
   },
   reportHint: {
-    color: '#666680',
+    fontFamily: fonts.body,
+    color: colors.inkSoft,
     fontSize: 14,
     lineHeight: 20,
   },
   verdict: {
+    fontFamily: fonts.display,
     fontSize: 24,
-    fontWeight: '800',
     marginBottom: 6,
   },
   verdictPass: {
-    color: '#6EE7A8',
+    color: colors.accent,
   },
   verdictFail: {
-    color: '#FF8A8A',
+    color: colors.warnSoft,
   },
   reportMeta: {
-    color: '#8888A0',
+    fontFamily: fonts.body,
+    color: colors.inkSoft,
     fontSize: 13,
     marginBottom: 12,
   },
@@ -274,36 +289,37 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#2A2A3A',
+    borderTopColor: colors.lagoon,
   },
   criterionStatus: {
+    fontFamily: fonts.bodyMedium,
     fontSize: 16,
-    fontWeight: '700',
     width: 18,
   },
   statusPass: {
-    color: '#6EE7A8',
+    color: colors.accent,
   },
   statusFail: {
-    color: '#FF8A8A',
+    color: colors.warnSoft,
   },
   criterionBody: {
     flex: 1,
     gap: 2,
   },
   criterionLabel: {
-    color: '#C8C8D8',
+    fontFamily: fonts.bodyMedium,
+    color: colors.ink,
     fontSize: 14,
-    fontWeight: '600',
   },
   criterionValue: {
-    color: '#8888A0',
+    fontFamily: fonts.body,
+    color: colors.inkSoft,
     fontSize: 13,
   },
   link: {
     marginTop: 24,
-    color: '#7EB6FF',
+    fontFamily: fonts.bodyMedium,
+    color: colors.accent,
     fontSize: 16,
-    fontWeight: '600',
   },
 });

@@ -13,6 +13,7 @@ import {
 import { PHASE2_GUI } from '@/copy/phaseTitles';
 import { PHASE2_MUSIC_HOVER_SUCCESS_ROUNDS } from '@/ml/phase2TurnStreak';
 import { Phase2Participant, Phase2TapPulse } from '@/hooks/usePhase2Session';
+import { colors, fonts, radii, visual } from '@/theme';
 
 type FlowWave = {
   id: number;
@@ -157,8 +158,8 @@ export function Phase2RippleStage({
     const path = Skia.Path.Make();
     path.moveTo(startX, startY);
     path.quadTo(ctrlX, ctrlY, x, y);
-    const hue = wave.participant === 'partner' ? 205 : 155;
-    const alpha = Math.max(0, (1 - progress) * 0.55);
+    const hue = wave.participant === 'partner' ? visual.partnerHue : visual.selfHue;
+    const alpha = Math.max(0, (1 - progress) * 0.48);
     return { id: wave.id, path, hue, alpha, progress, x, y };
   });
 
@@ -166,97 +167,96 @@ export function Phase2RippleStage({
     <View style={styles.container}>
       <View style={styles.visualPane} onLayout={onLayout}>
         <Canvas style={StyleSheet.absoluteFill}>
-        <Rect x={0} y={0} width={size.width} height={size.height}>
-          <LinearGradient
-            start={vec(0, 0)}
-            end={vec(size.width, size.height)}
-            colors={['#060A14', '#0E1830', '#12102A', '#080C18']}
-          />
-        </Rect>
-
-        {Array.from({ length: 2 }, (_, ring) => {
-          const ringPulse = 0.5 + 0.5 * Math.sin(drift * 0.9 + ring * 1.1);
-          const radius = poolRadius * (1.35 + ring * 0.42 + ringPulse * 0.08);
-          return (
-            <Circle
-              key={`pool-ring-${ring}`}
-              cx={centerX}
-              cy={centerY}
-              r={radius}
-              color={`hsla(${198 + ring * 8}, 72%, 58%, ${0.05 + jointGlow * 0.06})`}
+          <Rect x={0} y={0} width={size.width} height={size.height}>
+            <LinearGradient
+              start={vec(0, 0)}
+              end={vec(size.width, size.height)}
+              colors={[...visual.phase2Gradient]}
             />
-          );
-        })}
+          </Rect>
 
-        <Circle
-          cx={centerX}
-          cy={centerY}
-          r={poolRadius * (0.92 + poolPulse * 0.06)}
-          color={
-            musicHoverActive
-              ? `hsla(48, 96%, 72%, ${0.28 + rewardPulse * 0.22})`
-              : `hsla(195, 80%, 62%, ${0.14 + boostRef.current * 0.22})`
-          }
-        />
-        <Circle
-          cx={centerX}
-          cy={centerY}
-          r={poolRadius * (0.42 + (musicHoverActive ? rewardPulse * 0.12 : 0))}
-          color={
-            musicHoverActive
-              ? `hsla(42, 100%, 78%, ${0.34 + rewardPulse * 0.3})`
-              : `hsla(168, 88%, 72%, ${0.18 + jointGlow * 0.2})`
-          }
-        />
+          {Array.from({ length: 2 }, (_, ring) => {
+            const ringPulse = 0.5 + 0.5 * Math.sin(drift * 0.9 + ring * 1.1);
+            const radius = poolRadius * (1.35 + ring * 0.42 + ringPulse * 0.08);
+            return (
+              <Circle
+                key={`pool-ring-${ring}`}
+                cx={centerX}
+                cy={centerY}
+                r={radius}
+                color={`hsla(${176 + ring * 4}, 38%, 62%, ${0.08 + jointGlow * 0.1})`}
+              />
+            );
+          })}
 
-        {musicHoverActive
-          ? Array.from({ length: 3 }, (_, ring) => {
-              const swell = 0.5 + 0.5 * Math.sin(drift * 3.6 + ring * 0.85);
-              return (
-                <Circle
-                  key={`hover-ring-${ring}-${Math.floor(frame / 5)}`}
-                  cx={centerX}
-                  cy={centerY}
-                  r={poolRadius * (0.75 + ring * 0.28 + swell * 0.18)}
-                  color={`hsla(46, 100%, 68%, ${(0.16 - ring * 0.03) * swell})`}
-                />
-              );
-            })
-          : null}
-
-        {flowPaths.map((flow) => (
-          <Path
-            key={`flow-${flow.id}-${Math.floor(flow.progress * 100)}`}
-            path={flow.path}
-            style="stroke"
-            strokeWidth={10 + flow.progress * 6}
-            color={`hsla(${flow.hue}, 88%, 68%, ${flow.alpha})`}
-          />
-        ))}
-
-        {flowPaths.map((flow) => (
           <Circle
-            key={`spark-${flow.id}-${Math.floor(flow.progress * 100)}`}
-            cx={flow.x}
-            cy={flow.y}
-            r={5 + flow.progress * 8}
-            color={`hsla(${flow.hue}, 92%, 78%, ${flow.alpha * 0.9})`}
+            cx={centerX}
+            cy={centerY}
+            r={poolRadius * (0.92 + poolPulse * 0.06)}
+            color={
+              musicHoverActive
+                ? `hsla(38, 52%, 72%, ${0.28 + rewardPulse * 0.18})`
+                : `hsla(176, 42%, 58%, ${0.16 + boostRef.current * 0.18})`
+            }
           />
-        ))}
+          <Circle
+            cx={centerX}
+            cy={centerY}
+            r={poolRadius * (0.42 + (musicHoverActive ? rewardPulse * 0.12 : 0))}
+            color={
+              musicHoverActive
+                ? `hsla(36, 58%, 74%, ${0.3 + rewardPulse * 0.22})`
+                : `hsla(168, 48%, 62%, ${0.2 + jointGlow * 0.16})`
+            }
+          />
 
-        {showReward
-          ? (
+          {musicHoverActive
+            ? Array.from({ length: 3 }, (_, ring) => {
+                const swell = 0.5 + 0.5 * Math.sin(drift * 3.6 + ring * 0.85);
+                return (
+                  <Circle
+                    key={`hover-ring-${ring}-${Math.floor(frame / 5)}`}
+                    cx={centerX}
+                    cy={centerY}
+                    r={poolRadius * (0.75 + ring * 0.28 + swell * 0.18)}
+                    color={`hsla(38, 48%, 68%, ${(0.12 - ring * 0.025) * swell})`}
+                  />
+                );
+              })
+            : null}
+
+          {flowPaths.map((flow) => (
+            <Path
+              key={`flow-${flow.id}-${Math.floor(flow.progress * 100)}`}
+              path={flow.path}
+              style="stroke"
+              strokeWidth={10 + flow.progress * 6}
+              color={`hsla(${flow.hue}, 46%, 56%, ${flow.alpha})`}
+            />
+          ))}
+
+          {flowPaths.map((flow) => (
+            <Circle
+              key={`spark-${flow.id}-${Math.floor(flow.progress * 100)}`}
+              cx={flow.x}
+              cy={flow.y}
+              r={5 + flow.progress * 8}
+              color={`hsla(${flow.hue}, 50%, 58%, ${flow.alpha * 0.85})`}
+            />
+          ))}
+
+          {showReward ? (
             <>
               {Array.from({ length: 5 }, (_, ring) => {
                 const burst = 0.5 + 0.5 * Math.sin(drift * 5.2 + ring * 0.75);
-                const alpha = (0.5 - ring * 0.07) * burst;
+                const alpha = (0.38 - ring * 0.06) * burst;
                 return (
                   <Circle
                     key={`reward-ring-${ring}-${Math.floor(frame / 4)}`}
                     cx={centerX}
                     cy={centerY}
                     r={poolRadius * (1 + ring * 0.48 + burst * 0.32 + rewardPulse * 0.18)}
-                    color={`hsla(36, 100%, 58%, ${alpha})`}
+                    color={`hsla(36, 48%, 62%, ${alpha})`}
                   />
                 );
               })}
@@ -264,20 +264,19 @@ export function Phase2RippleStage({
                 cx={centerX}
                 cy={centerY}
                 r={poolRadius * (0.62 + rewardPulse * 0.18)}
-                color={`hsla(44, 100%, 70%, ${0.42 + rewardPulse * 0.38})`}
+                color={`hsla(38, 52%, 68%, ${0.32 + rewardPulse * 0.28})`}
               />
             </>
-          )
-          : null}
+          ) : null}
 
-        {isJointAttention ? (
-          <Circle
-            cx={centerX}
-            cy={centerY}
-            r={poolRadius * (1.55 + jointPulse * 0.12)}
-            color={`rgba(126, 231, 135, ${0.14 + jointPulse * 0.18})`}
-          />
-        ) : null}
+          {isJointAttention ? (
+            <Circle
+              cx={centerX}
+              cy={centerY}
+              r={poolRadius * (1.55 + jointPulse * 0.12)}
+              color={`rgba(111, 168, 162, ${0.16 + jointPulse * 0.14})`}
+            />
+          ) : null}
         </Canvas>
 
         {isJointAttention ? (
@@ -311,7 +310,7 @@ export function Phase2RippleStage({
 
       {successfulTurnRounds > 0 && !musicHoverActive ? (
         <Text style={styles.streakHint} pointerEvents="none">
-          默契 {successfulTurnRounds}/{PHASE2_MUSIC_HOVER_SUCCESS_ROUNDS}
+          {PHASE2_GUI.turnStreakLabel} {successfulTurnRounds}/{PHASE2_MUSIC_HOVER_SUCCESS_ROUNDS}
         </Text>
       ) : null}
 
@@ -327,7 +326,6 @@ export function Phase2RippleStage({
         >
           <Text style={styles.tapIcon}>{PHASE2_GUI.tapDrumIcon}</Text>
           <Text style={styles.tapTitle}>{PHASE2_GUI.parentTapLabel}</Text>
-         
         </Pressable>
 
         <Pressable
@@ -336,16 +334,16 @@ export function Phase2RippleStage({
             styles.tapZone,
             styles.tapZoneSelf,
             isChildTurn && {
-              borderColor: childBlinkSharp ? '#9BFFC0' : '#3A9E78',
-              borderWidth: childBlinkSharp ? 3 : 2,
+              borderColor: childBlinkSharp ? colors.ripple : colors.accent,
+              borderWidth: childBlinkSharp ? 2.5 : 2,
               backgroundColor: childBlinkSharp
-                ? 'rgba(28, 72, 54, 0.98)'
-                : 'rgba(12, 28, 22, 0.92)',
-              shadowColor: '#7EE787',
-              shadowOpacity: childBlink * 0.75,
-              shadowRadius: 4 + childBlink * 14,
+                ? 'rgba(197, 226, 221, 0.65)'
+                : 'rgba(244, 250, 249, 0.92)',
+              shadowColor: colors.tide,
+              shadowOpacity: childBlink * 0.35,
+              shadowRadius: 4 + childBlink * 10,
               shadowOffset: { width: 0, height: 0 },
-              elevation: 3 + Math.round(childBlink * 5),
+              elevation: 2 + Math.round(childBlink * 3),
             },
             showReward && styles.tapZoneSelfReward,
             pressed && styles.tapZonePressed,
@@ -357,7 +355,6 @@ export function Phase2RippleStage({
           <Text style={[styles.tapTitle, isChildTurn && childBlinkSharp && styles.tapTitleBlink]}>
             {PHASE2_GUI.childTapLabel}
           </Text>
-         
         </Pressable>
       </View>
     </View>
@@ -366,12 +363,12 @@ export function Phase2RippleStage({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#080C18',
+    backgroundColor: colors.mist,
   },
   visualPane: {
     height: 108,
     overflow: 'hidden',
-    backgroundColor: '#080C18',
+    backgroundColor: colors.mist,
   },
   centerLabel: {
     ...StyleSheet.absoluteFill,
@@ -391,25 +388,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 6,
-    backgroundColor: 'rgba(255, 248, 220, 0.92)',
+    backgroundColor: 'rgba(244, 250, 249, 0.92)',
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: 'rgba(255, 210, 120, 0.55)',
+    borderColor: colors.lagoon,
   },
   jointAttentionBadge: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 5,
-    backgroundColor: 'rgba(16, 56, 36, 0.95)',
+    backgroundColor: 'rgba(244, 250, 249, 0.9)',
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: 'rgba(126, 231, 135, 0.55)',
+    borderColor: colors.tide,
   },
   jointAttentionText: {
-    color: '#9BFFC0',
+    fontFamily: fonts.bodyMedium,
+    color: colors.deepTide,
     fontSize: 14,
-    fontWeight: '800',
     letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   jointPulseEmoji: {
     fontSize: 44,
@@ -421,9 +419,9 @@ const styles = StyleSheet.create({
   },
   streakHint: {
     textAlign: 'center',
-    color: 'rgba(255, 220, 150, 0.88)',
+    fontFamily: fonts.bodyMedium,
+    color: colors.inkSoft,
     fontSize: 11,
-    fontWeight: '700',
     paddingTop: 4,
   },
   tapRow: {
@@ -436,57 +434,50 @@ const styles = StyleSheet.create({
   tapZone: {
     flex: 1,
     minHeight: 130,
-    borderRadius: 14,
+    borderRadius: radii.button,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     paddingHorizontal: 6,
     paddingVertical: 16,
-    backgroundColor: 'rgba(12, 16, 28, 0.92)',
+    backgroundColor: colors.foam,
   },
   tapZonePartner: {
-    borderColor: '#5A8FD4',
+    borderColor: colors.tide,
   },
   tapZoneSelf: {
-    borderColor: '#5AD4A8',
+    borderColor: colors.accent,
   },
   tapZoneSelfReward: {
-    borderColor: '#B8FFD4',
-    borderWidth: 3,
-    backgroundColor: 'rgba(36, 92, 68, 0.98)',
-    shadowColor: '#9BFFC0',
-    shadowOpacity: 0.65,
-    shadowRadius: 16,
+    borderColor: colors.ripple,
+    borderWidth: 2.5,
+    backgroundColor: colors.rippleSoft,
+    shadowColor: colors.tide,
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 0 },
-    elevation: 8,
+    elevation: 4,
   },
   tapZoneDimmed: {
-    opacity: 0.52,
+    opacity: 0.55,
   },
   tapZonePressed: {
-    opacity: 0.82,
-    transform: [{ scale: 0.98 }],
+    opacity: 0.85,
   },
   tapIcon: {
     fontSize: 28,
     lineHeight: 32,
   },
   tapIconBlink: {
-    color: '#9BFFC0',
+    opacity: 1,
   },
   tapTitle: {
-    color: '#F5F5FA',
+    fontFamily: fonts.display,
+    color: colors.ink,
     fontSize: 16,
-    fontWeight: '800',
   },
   tapTitleBlink: {
-    color: '#9BFFC0',
-  },
-  tapHint: {
-    color: '#A6A6BA',
-    fontSize: 10,
-    textAlign: 'center',
-    lineHeight: 14,
+    color: colors.deepTide,
   },
 });

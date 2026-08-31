@@ -24,15 +24,15 @@ export function useMetricsStore() {
     [],
   );
 
-  const setSessionDemoMode = useCallback((enabled: boolean) => {
-    metricsStore.setSessionDemoMode(enabled);
+  const setSessionDeveloperMode = useCallback((enabled: boolean) => {
+    metricsStore.setSessionDeveloperMode(enabled);
   }, []);
 
   return {
     entries,
     summary,
     clear,
-    setSessionDemoMode,
+    setSessionDeveloperMode,
     shareCsvExport,
     shareEncryptedJsonExport,
   };

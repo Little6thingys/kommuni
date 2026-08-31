@@ -32,14 +32,14 @@ describe('MetricsStore', () => {
     expect(summary.entryCount).toBe(2);
     expect(summary.byKind.audio_latency).toBe(2);
     expect(summary.avgAudioLatencyMs).toBe(8);
-    expect(summary.demoMode).toBe(false);
+    expect(summary.developerMode).toBe(false);
   });
 
-  it('tracks demo mode on the session summary', () => {
-    metricsStore.setSessionDemoMode(true);
-    expect(metricsStore.getSessionSummary().demoMode).toBe(true);
+  it('tracks developer mode on the session summary', () => {
+    metricsStore.setSessionDeveloperMode(true);
+    expect(metricsStore.getSessionSummary().developerMode).toBe(true);
     metricsStore.clear();
-    expect(metricsStore.getSessionSummary().demoMode).toBe(false);
+    expect(metricsStore.getSessionSummary().developerMode).toBe(false);
   });
 
   it('exports CSV rows and round-trips encrypted JSON', () => {

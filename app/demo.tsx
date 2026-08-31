@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useIsFocused, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +20,7 @@ function formatNotes(notes: number[]): string {
 export default function DemoScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
   const {
     gaze,
     audio,
@@ -34,7 +35,7 @@ export default function DemoScreen() {
     successfulTurnRounds,
     handleTap,
     resetSession,
-  } = usePhase2Session();
+  } = usePhase2Session({ jointAttentionMonitoring: isFocused });
   const [rewardFlash, setRewardFlash] = useState(false);
   const [showRealtimeData, setShowRealtimeData] = useState(false);
   const [lowerHeight, setLowerHeight] = useState(200);

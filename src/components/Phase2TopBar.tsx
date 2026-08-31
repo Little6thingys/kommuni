@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PHASE2_GUI } from '@/copy/phaseTitles';
+import { colors, fonts } from '@/theme';
 
 type Phase2TopBarProps = {
   topInset: number;
@@ -15,7 +16,9 @@ export function Phase2TopBar({ topInset, onBack, rightSlot }: Phase2TopBarProps)
       <Pressable onPress={onBack} hitSlop={12} style={styles.backButton}>
         <Text style={styles.backButtonText}>{PHASE2_GUI.backLabel}</Text>
       </Pressable>
-      <Text style={styles.description}>{PHASE2_GUI.description}</Text>
+      <View style={styles.descriptionWrap}>
+        <Text style={styles.description}>{PHASE2_GUI.description}</Text>
+      </View>
       {rightSlot ? <View style={styles.rightSlot}>{rightSlot}</View> : null}
     </View>
   );
@@ -34,22 +37,29 @@ const styles = StyleSheet.create({
   backButton: {
     paddingVertical: 6,
     paddingHorizontal: 4,
-    backgroundColor: 'rgba(11, 11, 18, 0.55)',
+    backgroundColor: 'rgba(244, 250, 249, 0.75)',
     borderRadius: 8,
     flexShrink: 0,
   },
   backButtonText: {
-    color: '#7EB6FF',
+    fontFamily: fonts.bodyMedium,
+    color: colors.accent,
     fontSize: 15,
-    fontWeight: '700',
+  },
+  descriptionWrap: {
+    flex: 1,
+    backgroundColor: 'rgba(244, 250, 249, 0.92)',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(111, 168, 162, 0.35)',
   },
   description: {
-    flex: 1,
-    color: '#C8C8D8',
-    fontSize: 12,
-    lineHeight: 17,
-    paddingTop: 7,
-    paddingRight: 4,
+    fontFamily: fonts.bodyMedium,
+    color: colors.ink,
+    fontSize: 14,
+    lineHeight: 20,
   },
   rightSlot: {
     flexShrink: 0,

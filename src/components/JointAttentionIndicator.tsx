@@ -1,6 +1,8 @@
 import { PHASE2_GUI } from '@/copy/phaseTitles';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { colors, fonts, radii } from '@/theme';
+
 type JointAttentionIndicatorProps = {
   active: boolean;
   /** Native MediaPipe gaze path is live (not preview-only mock). */
@@ -50,26 +52,27 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 18,
     paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: 'rgba(18, 72, 42, 0.92)',
+    borderRadius: radii.pill,
+    backgroundColor: 'rgba(244, 250, 249, 0.92)',
     borderWidth: 2,
-    borderColor: '#7EE787',
-    shadowColor: '#7EE787',
-    shadowOpacity: 0.55,
-    shadowRadius: 12,
+    borderColor: colors.tide,
+    shadowColor: colors.tide,
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
-    elevation: 6,
+    elevation: 3,
   },
   activeDot: {
-    color: '#9BFFC0',
+    color: colors.accent,
     fontSize: 14,
     lineHeight: 16,
   },
   activeText: {
-    color: '#E8FFF0',
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    fontFamily: fonts.bodyMedium,
+    color: colors.deepTide,
+    fontSize: 15,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   hintWrap: {
     alignItems: 'center',
@@ -78,15 +81,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   hintText: {
-    color: 'rgba(200, 230, 210, 0.78)',
+    fontFamily: fonts.body,
+    color: colors.inkSoft,
     fontSize: 13,
-    fontWeight: '600',
     textAlign: 'center',
   },
   unavailableText: {
-    color: 'rgba(180, 190, 210, 0.65)',
+    fontFamily: fonts.body,
+    color: colors.inkSoft,
     fontSize: 12,
-    fontWeight: '500',
     textAlign: 'center',
+    opacity: 0.75,
   },
 });

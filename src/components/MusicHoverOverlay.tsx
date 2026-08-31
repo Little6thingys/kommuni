@@ -1,5 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
+import { colors } from '@/theme';
+
 type MusicHoverOverlayProps = {
   active: boolean;
 };
@@ -23,7 +25,7 @@ const styles = StyleSheet.create({
     zIndex: 200,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 250, 235, 0.55)',
+    backgroundColor: 'rgba(244, 250, 249, 0.62)',
   },
   emoji: {
     fontSize: 112,

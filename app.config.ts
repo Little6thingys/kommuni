@@ -7,7 +7,7 @@ const config: ExpoConfig = {
   version: '1.0.0',
   orientation: 'landscape',
   icon: './assets/icon.png',
-  userInterfaceStyle: 'dark',
+  userInterfaceStyle: 'light',
   scheme: 'kommuni',
   ios: {
     supportsTablet: true,
@@ -22,7 +22,7 @@ const config: ExpoConfig = {
   android: {
     package: 'com.kommuni.app',
     adaptiveIcon: {
-      backgroundColor: '#0B0B12',
+      backgroundColor: '#E8F1F0',
       foregroundImage: './assets/android-icon-foreground.png',
       backgroundImage: './assets/android-icon-background.png',
       monochromeImage: './assets/android-icon-monochrome.png',

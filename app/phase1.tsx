@@ -14,7 +14,7 @@ import { MetricsDebugOverlay } from '@/components/MetricsDebugOverlay';
 import { ParticleField } from '@/components/ParticleField';
 import { PhaseTransitionOverlay } from '@/components/PhaseTransitionOverlay';
 import { TouchCanvas } from '@/components/TouchCanvas';
-import { PHASE1_GUI } from '@/copy/phaseTitles';
+import { PHASE1_GUI, PHASE2_GUI } from '@/copy/phaseTitles';
 import { PATIENCE_DURATION_MS } from '@/fsm/constants';
 import { useAudioEngine } from '@/hooks/useAudioEngine';
 import { usePhaseFSM } from '@/hooks/usePhaseFSM';
@@ -29,7 +29,7 @@ import {
   recoverStressWhenIdle,
 } from '@/ml/melodyBridge';
 import { TouchPoint } from '@/ml/touchFeatureExtraction';
-import { isDemoMode } from '@/session/demoModeStore';
+import { colors, fonts, radii } from '@/theme';
 import { setPhase1Latent } from '@/session/phaseLatentStore';
 import { TouchLatent } from '@/types';
 
@@ -169,7 +169,7 @@ export default function Phase1Screen() {
   const goToPhase2 = useCallback(() => {
     setPhase1Latent(latent.z);
     stop();
-    router.replace(isDemoMode() ? '/demo' : '/phase2');
+    router.replace('/phase2');
   }, [latent.z, router, stop]);
 
   const handleTransitionComplete = useCallback(() => {
@@ -246,40 +246,42 @@ export default function Phase1Screen() {
           </View>
 
           <View style={styles.footerOverlay} pointerEvents="box-none">
-            <View style={styles.calmMetric} pointerEvents="none">
-              <Text style={styles.metricLabel}>Calm</Text>
-              <View style={styles.metricRow}>
-                <Text style={styles.metricValue}>{audioCalmness.toFixed(2)}</Text>
-                <Text
-                  style={[
-                    styles.gentleSeconds,
-                    fsm.patienceElapsedSeconds > 0 && styles.gentleSecondsActive,
-                  ]}
-                >
-                  {fsm.patienceElapsedSeconds}s / {PATIENCE_DURATION_MS / 1000}s
-                </Text>
+            <View style={styles.footerRow}>
+              <View style={styles.footerLeft}>
+                <View style={styles.calmMetric} pointerEvents="none">
+                  <Text style={styles.metricLabel}>Calm</Text>
+                  <View style={styles.metricRow}>
+                    <Text style={styles.metricValue}>{audioCalmness.toFixed(2)}</Text>
+                    <Text
+                      style={[
+                        styles.gentleSeconds,
+                        fsm.patienceElapsedSeconds > 0 && styles.gentleSecondsActive,
+                      ]}
+                    >
+                      {fsm.patienceElapsedSeconds}s / {PATIENCE_DURATION_MS / 1000}s
+                    </Text>
+                  </View>
+                </View>
+
+                {fsm.isPatienceActive ? (
+                  <View style={styles.patienceTrack} pointerEvents="none">
+                    <View
+                      style={[
+                        styles.patienceFill,
+                        { width: `${fsm.patienceProgress * 100}%` },
+                      ]}
+                    />
+                  </View>
+                ) : null}
               </View>
+
+              <Pressable
+                onPress={goToPhase2}
+                style={({ pressed }) => [styles.skipButton, pressed && styles.skipButtonPressed]}
+              >
+                <Text style={styles.skipButtonText}>{PHASE2_GUI.skipLabel}</Text>
+              </Pressable>
             </View>
-
-            {fsm.isPatienceActive ? (
-              <View style={styles.patienceTrack} pointerEvents="none">
-                <View
-                  style={[
-                    styles.patienceFill,
-                    { width: `${fsm.patienceProgress * 100}%` },
-                  ]}
-                />
-              </View>
-            ) : null}
-
-            <Pressable
-              onPress={goToPhase2}
-              style={({ pressed }) => [styles.skipLink, pressed && styles.skipPressed]}
-            >
-              <Text style={styles.skipText}>
-                {isDemoMode() ? 'Skip to Phase 2 (demo)' : 'Skip to Phase 2 (debug)'}
-              </Text>
-            </Pressable>
           </View>
         </View>
       </SafeAreaView>
@@ -298,16 +300,16 @@ export default function Phase1Screen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#0B0B12',
+    backgroundColor: colors.mist,
   },
   safe: {
     flex: 1,
-    backgroundColor: '#0B0B12',
+    backgroundColor: colors.mist,
   },
   stage: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: '#0B0B12',
+    backgroundColor: colors.mist,
   },
   overlayLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -332,7 +334,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 10,
     paddingBottom: 10,
-    backgroundColor: 'rgba(11, 11, 18, 0.78)',
+    backgroundColor: 'rgba(244, 250, 249, 0.88)',
     zIndex: 20,
   },
   backButton: {
@@ -343,9 +345,9 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   backButtonText: {
-    color: '#7EB6FF',
+    fontFamily: fonts.bodyMedium,
+    color: colors.accent,
     fontSize: 15,
-    fontWeight: '600',
   },
   topBarCopy: {
     flex: 1,
@@ -353,17 +355,19 @@ const styles = StyleSheet.create({
     paddingTop: 1,
   },
   title: {
-    color: '#F5F5FA',
+    fontFamily: fonts.display,
+    color: colors.ink,
     fontSize: 18,
-    fontWeight: '700',
   },
   subtitle: {
-    color: '#8888A0',
+    fontFamily: fonts.body,
+    color: colors.inkSoft,
     fontSize: 12,
     lineHeight: 16,
   },
   hint: {
-    color: '#7EB6FF',
+    fontFamily: fonts.body,
+    color: colors.accent,
     fontSize: 12,
     lineHeight: 16,
     marginTop: 2,
@@ -379,14 +383,24 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 8,
     right: 8,
-    bottom: 0,
+    bottom: 8,
     zIndex: 20,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  footerLeft: {
+    flex: 1,
     gap: 4,
+    maxWidth: '72%',
   },
   calmMetric: {
     alignSelf: 'flex-start',
     borderRadius: 8,
-    backgroundColor: 'rgba(21, 21, 34, 0.92)',
+    backgroundColor: 'rgba(244, 250, 249, 0.92)',
     paddingVertical: 6,
     paddingHorizontal: 10,
     gap: 1,
@@ -399,44 +413,56 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   metricLabel: {
-    color: '#8888A0',
+    fontFamily: fonts.bodyMedium,
+    color: colors.inkSoft,
     fontSize: 10,
     textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   metricValue: {
-    color: '#F5F5FA',
+    fontFamily: fonts.displayRegular,
+    color: colors.ink,
     fontSize: 13,
-    fontWeight: '700',
   },
   gentleSeconds: {
-    color: '#666680',
+    fontFamily: fonts.bodyMedium,
+    color: colors.inkSoft,
     fontSize: 12,
-    fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
   gentleSecondsActive: {
-    color: '#7EB6FF',
+    color: colors.accent,
   },
   patienceTrack: {
     height: 6,
     borderRadius: 999,
-    backgroundColor: '#1E1E2C',
+    backgroundColor: 'rgba(61, 111, 106, 0.15)',
     overflow: 'hidden',
   },
   patienceFill: {
     height: '100%',
     borderRadius: 999,
-    backgroundColor: '#7EB6FF',
+    backgroundColor: colors.tide,
   },
-  skipLink: {
-    alignSelf: 'flex-start',
-    paddingVertical: 2,
+  skipButton: {
+    backgroundColor: colors.deepTide,
+    borderRadius: radii.button,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 36,
+    minWidth: 168,
+    flexShrink: 0,
   },
-  skipPressed: {
-    opacity: 0.7,
+  skipButtonPressed: {
+    opacity: 0.85,
   },
-  skipText: {
-    color: '#666680',
-    fontSize: 12,
+  skipButtonText: {
+    fontFamily: fonts.bodyMedium,
+    color: colors.foam,
+    fontSize: 11,
+    lineHeight: 14,
+    textAlign: 'center',
   },
 });
