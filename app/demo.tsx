@@ -62,7 +62,7 @@ export default function DemoScreen() {
         onBack={() => router.back()}
         rightSlot={
           <Pressable onPress={resetSession} style={styles.resetButton}>
-            <Text style={styles.resetButtonText}>重置</Text>
+            <Text style={styles.resetButtonText}>Reset</Text>
           </Pressable>
         }
       />
@@ -87,12 +87,12 @@ export default function DemoScreen() {
             <View style={styles.cameraPlaceholder}>
               <Text style={styles.cameraPlaceholderText}>
                 {gaze.canRequestPermission
-                  ? '请授权相机以显示面对面画面'
-                  : '相机预览加载中…'}
+                  ? 'Allow camera access to show the face-to-face view'
+                  : 'Loading camera preview…'}
               </Text>
               {gaze.canRequestPermission ? (
                 <Pressable onPress={gaze.requestPermission} style={styles.cameraPermissionButton}>
-                  <Text style={styles.cameraPermissionButtonText}>授权相机</Text>
+                  <Text style={styles.cameraPermissionButtonText}>Allow camera</Text>
                 </Pressable>
               ) : null}
             </View>
